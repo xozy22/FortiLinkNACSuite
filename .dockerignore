@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+web/dist
+server/data
+.git
+.github
+.claude
+.playwright-mcp
+docs
+*.log
+.env
+.env.local

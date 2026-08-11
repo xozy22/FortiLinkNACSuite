@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+server/data/connections.json
+*.log
+.DS_Store
+.playwright-mcp/
+.vite/
+*.tsbuildinfo

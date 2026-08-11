@@ -1,0 +1,228 @@
+/* ==========================================================================
+   FortiLink NAC Suite – Design-System
+   Dark-first NOC-Aesthetik. Fortinet-Rot als Marken-Akzent, semantische
+   Statusfarben fuer NAC-Logik (matched / uncovered / conflict).
+   ========================================================================== */
+
+:root {
+  /* Flaechen – von tief nach erhaben */
+  --bg-app: #080b10;
+  --bg-sunken: #06090d;
+  --bg-panel: #0f141c;
+  --bg-panel-2: #131a24;
+  --bg-elevated: #19222f;
+  --bg-hover: #1d2837;
+  --bg-active: #233042;
+
+  /* Linien */
+  --border: #212c3b;
+  --border-soft: #1a2430;
+  --border-strong: #30405499;
+  --border-focus: #e23b2b;
+
+  /* Text */
+  --text: #e7eef6;
+  --text-muted: #94a2b4;
+  --text-dim: #5d6b7d;
+  --text-faint: #3f4b5a;
+
+  /* Primaer-Akzent: Fortinet-Rot (#da291c) */
+  --accent: #da291c;
+  --accent-bright: #ef4130;
+  --accent-dim: #a81d12;
+  --accent-soft: #da291c1f;
+  --accent-line: #da291c55;
+  --on-accent: #fff1ef;
+
+  /* Semantik */
+  --green: #46c46a;
+  --green-soft: #46c46a1f;
+  --red: #f4585f;
+  --red-soft: #f4585f1f;
+  --amber: #e0a32e;
+  --amber-soft: #e0a32e1f;
+  --blue: #4f9cf9;
+  --blue-soft: #4f9cf91f;
+  --violet: #9d7bf0;
+  --violet-soft: #9d7bf01f;
+  --teal: #2fb8ad;
+  --teal-soft: #2fb8ad1f;
+
+  /* Diff-Farben (Change Drawer) */
+  --diff-add: #46c46a;
+  --diff-add-bg: #46c46a14;
+  --diff-del: #f4585f;
+  --diff-del-bg: #f4585f14;
+  --diff-mod: #e0a32e;
+  --diff-mod-bg: #e0a32e14;
+
+  /* Typografie */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-base: 13.5px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 23px;
+  --fs-2xl: 30px;
+
+  /* Radien & Schatten */
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px -6px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 0 1px var(--accent-line), 0 8px 30px -10px rgba(218, 41, 28, 0.28);
+
+  /* Layout */
+  --sidebar-w: 236px;
+  --topbar-h: 52px;
+  --drawer-w: 460px;
+
+  color-scheme: dark;
+}
+
+/* --------------------------------------------------------------------------
+   Light-Theme – ueberschreibt nur Farben/Schatten
+   -------------------------------------------------------------------------- */
+:root[data-theme='light'] {
+  --bg-app: #eef1f6;
+  --bg-sunken: #e6eaf0;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #f5f7fa;
+  --bg-elevated: #ffffff;
+  --bg-hover: #eef1f5;
+  --bg-active: #e3e8ef;
+
+  --border: #d3dae4;
+  --border-soft: #e2e7ee;
+  --border-strong: #b9c3d1;
+
+  --text: #17202c;
+  --text-muted: #566274;
+  --text-dim: #7d8899;
+  --text-faint: #a3adbb;
+
+  --accent-soft: #da291c14;
+  --accent-line: #da291c40;
+
+  --green: #1f9d4d;
+  --green-soft: #1f9d4d14;
+  --red: #d3323b;
+  --red-soft: #d3323b14;
+  --amber: #b9791a;
+  --amber-soft: #b9791a14;
+  --blue: #2570d6;
+  --blue-soft: #2570d614;
+  --violet: #7452cf;
+  --violet-soft: #7452cf14;
+  --teal: #17867e;
+  --teal-soft: #17867e14;
+
+  --diff-add: #1f9d4d;
+  --diff-add-bg: #1f9d4d12;
+  --diff-del: #d3323b;
+  --diff-del-bg: #d3323b12;
+  --diff-mod: #b9791a;
+  --diff-mod-bg: #b9791a12;
+
+  --shadow-sm: 0 1px 2px rgba(23, 32, 44, 0.08);
+  --shadow-md: 0 6px 18px -8px rgba(23, 32, 44, 0.22);
+  --shadow-lg: 0 24px 60px -24px rgba(23, 32, 44, 0.3);
+  --shadow-glow: 0 0 0 1px var(--accent-line), 0 8px 26px -12px rgba(218, 41, 28, 0.28);
+
+  color-scheme: light;
+}
+
+/* --------------------------------------------------------------------------
+   Reset & Basis
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+kbd,
+pre,
+.mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
