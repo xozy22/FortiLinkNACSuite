@@ -103,11 +103,11 @@ Worth internalising, because most "my policy does nothing" problems come from on
 ```mermaid
 flowchart TD
   A["Device connects to a FortiSwitch port"] --> B{"Port access-mode"}
-  B -- "static / nac" --> Z["Nothing happens —<br/>no dynamic port policy runs"]
-  B -- "dynamic" --> C["The policy named in<br/><b>ports.port-policy</b>"]
-  C --> D{"Rules, top to bottom —<br/>first match wins"}
-  D -- "a rule matches" --> G["Apply its actions:<br/>VLAN policy · 802.1X · QoS<br/>LLDP · bounce · PoE reset"]
-  D -- "no rule matches" --> Y["Port keeps its<br/>static configuration"]
+  B -- "static / nac" --> Z["Nothing happens, no dynamic port policy runs"]
+  B -- "dynamic" --> C["The policy named in ports.port-policy"]
+  C --> D{"Rules top to bottom, first match wins"}
+  D -- "a rule matches" --> G["Apply its actions: VLAN policy, 802.1X, QoS, LLDP, bounce, PoE reset"]
+  D -- "no rule matches" --> Y["Port keeps its static configuration"]
 
   style G fill:#da291c,stroke:#a81d12,color:#fff
   style Z fill:#f5f7fa,stroke:#b9c3d1,color:#57606a
