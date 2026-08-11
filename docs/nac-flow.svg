@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="700" viewBox="0 0 900 700" role="img"
+     aria-label="How a device is evaluated: the port access-mode decides whether a dynamic port policy runs at all, then the first matching rule applies its actions.">
+  <title>FortiLink NAC evaluation flow</title>
+
+  <!--
+    Deliberately a static SVG rather than a mermaid block: GitHub renders mermaid
+    client-side and silently falls back to a plain code block in editors, mobile
+    apps and script-restricted browsers. The nodes are light cards on a
+    transparent background, so the diagram reads on both GitHub themes.
+  -->
+
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b98a9"/>
+    </marker>
+    <style>
+      .n    { fill:#eef1f6; stroke:#c3ccd8; stroke-width:1.5; }
+      .dec  { fill:#e3e9f2; stroke:#adbbcc; stroke-width:1.5; }
+      .dead { fill:#f5f7fa; stroke:#cdd6e0; stroke-width:1.5; }
+      .hit  { fill:#da291c; stroke:#a81d12; stroke-width:1.5; }
+      .t    { font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif; font-size:16px; fill:#1f2937; text-anchor:middle; }
+      .td   { font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif; font-size:16px; fill:#57606a; text-anchor:middle; }
+      .th   { font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif; font-size:16px; fill:#ffffff; text-anchor:middle; }
+      .mono { font-family:'IBM Plex Mono','Cascadia Code',Consolas,monospace; font-size:15px; }
+      .e    { stroke:#8b98a9; stroke-width:2; fill:none; marker-end:url(#arw); }
+      .lbl  { font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif; font-size:14px; fill:#4a5563; text-anchor:middle; }
+      .chip { fill:#eef1f6; stroke:#c3ccd8; stroke-width:1; }
+    </style>
+  </defs>
+
+  <!-- A: device connects -->
+  <rect class="n" x="280" y="19" width="300" height="54" rx="9"/>
+  <text class="t" x="430" y="44">Device connects to a</text>
+  <text class="t" x="430" y="63">FortiSwitch port</text>
+
+  <path class="e" d="M430 73 V102"/>
+
+  <!-- B: access-mode decision -->
+  <path class="dec" d="M430 108 L545 150 L430 192 L315 150 Z"/>
+  <text class="t mono" x="430" y="156">access-mode</text>
+
+  <!-- B -> Z -->
+  <path class="e" d="M315 150 H190 V248"/>
+  <rect class="chip" x="196" y="163" width="94" height="22" rx="5"/>
+  <text class="lbl mono" x="243" y="178">static / nac</text>
+
+  <!-- B -> C -->
+  <path class="e" d="M545 150 H640 V248"/>
+  <rect class="chip" x="600" y="163" width="76" height="22" rx="5"/>
+  <text class="lbl mono" x="638" y="178">dynamic</text>
+
+  <!-- Z: dead end -->
+  <rect class="dead" x="45" y="254" width="290" height="62" rx="9"/>
+  <text class="td" x="190" y="280">Nothing happens — no dynamic</text>
+  <text class="td" x="190" y="301">port policy runs here</text>
+
+  <!-- C: the policy -->
+  <rect class="n" x="475" y="254" width="330" height="62" rx="9"/>
+  <text class="t" x="640" y="280">The policy named in</text>
+  <text class="t mono" x="640" y="301">ports.port-policy</text>
+
+  <path class="e" d="M640 316 V357"/>
+
+  <!-- D: rule chain decision -->
+  <path class="dec" d="M640 363 L805 415 L640 467 L475 415 Z"/>
+  <text class="t" x="640" y="410">Rules top to bottom,</text>
+  <text class="t" x="640" y="430">first match wins</text>
+
+  <!-- D -> G -->
+  <path class="e" d="M540 442 H420 V524"/>
+  <rect class="chip" x="368" y="452" width="106" height="22" rx="5"/>
+  <text class="lbl" x="421" y="467">a rule matches</text>
+
+  <!-- D -> Y -->
+  <path class="e" d="M740 442 H770 V524"/>
+  <rect class="chip" x="716" y="452" width="118" height="22" rx="5"/>
+  <text class="lbl" x="775" y="467">no rule matches</text>
+
+  <!-- G: actions applied -->
+  <rect class="hit" x="255" y="530" width="330" height="86" rx="9"/>
+  <text class="th" x="420" y="558" font-weight="600">Apply its actions</text>
+  <text class="th" x="420" y="580" font-size="14">VLAN policy · 802.1X · QoS · LLDP</text>
+  <text class="th" x="420" y="600" font-size="14">bounce port link · PoE reset</text>
+
+  <!-- Y: dead end -->
+  <rect class="dead" x="650" y="530" width="240" height="62" rx="9"/>
+  <text class="td" x="770" y="556">Port keeps its static</text>
+  <text class="td" x="770" y="577">configuration</text>
+
+  <!-- Footnote -->
+  <text class="lbl" x="450" y="660" font-size="13" fill="#8b98a9">
+    A rule with no match criteria catches everything — anything below it never runs.
+  </text>
+</svg>

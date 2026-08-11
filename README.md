@@ -100,6 +100,13 @@ catch-all so they actually fire.
 
 Worth internalising, because most "my policy does nothing" problems come from one of these three facts.
 
+<p align="center">
+  <img src="docs/nac-flow.svg" alt="Evaluation flow: the port access-mode decides whether a dynamic port policy runs at all; then the first matching rule applies its actions." width="820">
+</p>
+
+<details>
+<summary>Same diagram as mermaid source</summary>
+
 ```mermaid
 flowchart TD
   A["Device connects to a FortiSwitch port"] --> B{"Port access-mode"}
@@ -113,6 +120,8 @@ flowchart TD
   style Z fill:#f5f7fa,stroke:#b9c3d1,color:#57606a
   style Y fill:#f5f7fa,stroke:#b9c3d1,color:#57606a
 ```
+
+</details>
 
 **1. A policy does nothing until a port opts in.**
 A dynamic port policy only runs on ports where `access-mode` is `dynamic` **and** `port-policy`
