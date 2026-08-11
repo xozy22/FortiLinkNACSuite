@@ -101,16 +101,17 @@ catch-all so they actually fire.
 Worth internalising, because most "my policy does nothing" problems come from one of these three facts.
 
 ```mermaid
-flowchart LR
-  A[Device connects<br/>to a FortiSwitch port] --> B{Port access-mode}
-  B -- static / nac --> Z[No dynamic port policy runs]
-  B -- dynamic --> C[The policy named in<br/>ports.port-policy]
-  C --> D[Rule 1]
-  D -- no match --> E[Rule 2]
-  E -- no match --> F[Rule n / catch-all]
-  D -- match --> G[Apply actions:<br/>VLAN policy, 802.1X,<br/>QoS, LLDP, PoE reset]
-  E -- match --> G
-  F -- match --> G
+flowchart TD
+  A["Device connects to a FortiSwitch port"] --> B{"Port access-mode"}
+  B -- "static / nac" --> Z["Nothing happens —<br/>no dynamic port policy runs"]
+  B -- "dynamic" --> C["The policy named in<br/><b>ports.port-policy</b>"]
+  C --> D{"Rules, top to bottom —<br/>first match wins"}
+  D -- "a rule matches" --> G["Apply its actions:<br/>VLAN policy · 802.1X · QoS<br/>LLDP · bounce · PoE reset"]
+  D -- "no rule matches" --> Y["Port keeps its<br/>static configuration"]
+
+  style G fill:#da291c,stroke:#a81d12,color:#fff
+  style Z fill:#f5f7fa,stroke:#b9c3d1,color:#57606a
+  style Y fill:#f5f7fa,stroke:#b9c3d1,color:#57606a
 ```
 
 **1. A policy does nothing until a port opts in.**
