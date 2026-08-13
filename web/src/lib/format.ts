@@ -49,6 +49,16 @@ export function slug(v: string, max = 63): string {
     .slice(0, max);
 }
 
+/** Portgeschwindigkeit in Mbit/s lesbar machen (1000 -> "1 Gbps"). */
+export function linkSpeed(mbps: number | null | undefined): string {
+  if (!mbps || !Number.isFinite(mbps) || mbps <= 0) return '';
+  if (mbps >= 1000) {
+    const g = mbps / 1000;
+    return `${Number.isInteger(g) ? g : g.toFixed(1)} Gbps`;
+  }
+  return `${mbps} Mbps`;
+}
+
 export function truncate(v: string, n: number): string {
   const s = String(v ?? '');
   return s.length <= n ? s : s.slice(0, n - 1) + '…';

@@ -10,24 +10,56 @@ import { Plug, RefreshCcw, Zap } from 'lucide-react';
 import { useBouncePort, useInventory, useRefData } from '@/api/hooks';
 import { useChangeset } from '@/state/changeset';
 import { useToast } from '@/state/toast';
-import type { SwitchPort } from '@/api/types';
+import type { PortStatus, SwitchPort } from '@/api/types';
 import { Empty, ErrorBox, Loading, Modal, Note } from '@/components/common';
 import { applyFilter, emptyFilter, FilterBar, type FacetDef, type FilterState } from '@/components/FilterBar';
 import { SelectField } from '@/components/fields';
 import { projectDpps, projectSwitches, type Pending } from '@/lib/project';
 import { setPort } from '@/lib/ops';
-import { members, pluralize } from '@/lib/format';
+import { linkSpeed, members, pluralize } from '@/lib/format';
 
 interface Row {
   switchId: string;
   switchDesc: string;
   port: Pending<SwitchPort>;
+  /** Operativer Zustand aus dem Monitor, sofern lesbar. */
+  status: PortStatus | null;
+  /** Administrativ abgeschaltet (CMDB ports.status = down). */
+  adminDown: boolean;
   devices: number;
   matchedRules: string[];
 }
 
+/** Ein Wert, der Admin- und Link-Zustand zusammenfasst – so filtert man danach sinnvoll. */
+function linkState(r: Row): 'admin-down' | 'up' | 'down' | 'unknown' {
+  if (r.adminDown) return 'admin-down';
+  if (!r.status) return 'unknown';
+  return r.status.link === 'up' ? 'up' : 'down';
+}
+
+const LINK_LABEL: Record<string, string> = {
+  up: 'Link up',
+  down: 'Link down',
+  'admin-down': 'Administratively down',
+  unknown: 'Unknown',
+};
+
+/** Eine Suchfunktion fuer Tabelle und Facettenzaehlung – sonst laufen beide auseinander. */
+const searchText = (r: Row) =>
+  [
+    r.switchId,
+    r.switchDesc,
+    r.port['port-name'],
+    r.port.description,
+    r.port['port-policy'],
+    members(r.port['interface-tags'], 'tag-name').join(' '),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
 const FACETS: FacetDef<Row>[] = [
   { key: 'switch', label: 'Switch', value: (r) => r.switchId },
+  { key: 'link', label: 'Link', value: linkState, display: (v) => LINK_LABEL[v] ?? v },
   { key: 'mode', label: 'Access mode', value: (r) => r.port['access-mode'] ?? 'static' },
   { key: 'policy', label: 'Port policy', value: (r) => r.port['port-policy'] ?? '' },
   { key: 'tag', label: 'Tag', value: (r) => members(r.port['interface-tags'], 'tag-name')[0] ?? '' },
@@ -59,40 +91,42 @@ export function PortsPage() {
       byPort.set(k, e);
     }
 
+    const statusMap = ref?._portStatus ?? {};
+
     return switches.flatMap((sw) =>
       (sw.ports ?? []).map((p) => {
-        const e = byPort.get(`${sw['switch-id']}|${p['port-name']}`);
+        const k = `${sw['switch-id']}|${p['port-name']}`;
+        const e = byPort.get(k);
         return {
           switchId: sw['switch-id'],
           switchDesc: sw.description ?? '',
           port: p as Pending<SwitchPort>,
+          status: statusMap[k] ?? null,
+          adminDown: p.status === 'down',
           devices: e?.n ?? 0,
           matchedRules: [...(e?.rules ?? [])],
         };
       })
     );
-  }, [switches, inventory]);
+  }, [switches, inventory, ref]);
 
-  const filtered = useMemo(
-    () =>
-      applyFilter(rows, filter, FACETS, (r) =>
-        [r.switchId, r.port['port-name'], r.port.description, r.port['port-policy'], members(r.port['interface-tags'], 'tag-name').join(' ')]
-          .filter(Boolean)
-          .join(' ')
-      ),
-    [rows, filter]
-  );
+  const filtered = useMemo(() => applyFilter(rows, filter, FACETS, searchText), [rows, filter]);
 
   const key = (r: Row) => `${r.switchId}|${r.port['port-name']}`;
   const allSelected = filtered.length > 0 && filtered.every((r) => selected.has(key(r)));
 
   const stats = useMemo(() => {
-    const s = { dynamic: 0, nac: 0, static: 0 };
+    const s = { dynamic: 0, nac: 0, static: 0, up: 0, adminDown: 0, haveStatus: false };
     for (const r of rows) {
       const m = r.port['access-mode'] ?? 'static';
       if (m === 'dynamic') s.dynamic++;
       else if (m === 'nac') s.nac++;
       else s.static++;
+      if (r.adminDown) s.adminDown++;
+      if (r.status) {
+        s.haveStatus = true;
+        if (r.status.link === 'up') s.up++;
+      }
     }
     return s;
   }, [rows]);
@@ -113,6 +147,19 @@ export function PortsPage() {
           </div>
         </div>
         <div className="page-actions">
+          {stats.haveStatus && (
+            <>
+              <span className="badge blue" title="Ports with an active link">
+                {stats.up} up
+              </span>
+              {stats.adminDown > 0 && (
+                <span className="badge red" title="Ports administratively disabled in the configuration">
+                  {stats.adminDown} admin down
+                </span>
+              )}
+              <div className="sep" />
+            </>
+          )}
           <span className="badge green">{stats.dynamic} dynamic</span>
           {stats.nac > 0 && <span className="badge violet">{stats.nac} nac</span>}
           <span className="badge gray">{stats.static} static</span>
@@ -132,8 +179,8 @@ export function PortsPage() {
           facets={FACETS}
           state={filter}
           onChange={setFilter}
-          search={(r) => [r.switchId, r.port['port-name'], r.port['port-policy']].filter(Boolean).join(' ')}
-          placeholder="Search switch, port, policy…"
+          search={searchText}
+          placeholder="Search switch, port, description, policy…"
           right={<span className="xs dim">{filtered.length} of {rows.length} ports</span>}
         />
 
@@ -141,12 +188,14 @@ export function PortsPage() {
           <table className="tbl">
             <colgroup>
               <col style={{ width: 34 }} />
-              <col style={{ width: 170 }} />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 170 }} />
+              <col style={{ width: 158 }} />
+              <col style={{ width: 122 }} />
+              <col style={{ width: 190 }} />
+              <col style={{ width: 104 }} />
               <col style={{ width: 150 }} />
+              <col style={{ width: 130 }} />
               <col />
-              <col style={{ width: 80 }} />
+              <col style={{ width: 62 }} />
             </colgroup>
             <thead>
               <tr>
@@ -166,6 +215,8 @@ export function PortsPage() {
                   />
                 </th>
                 <th>Port</th>
+                <th>Link</th>
+                <th>Description</th>
                 <th>Access mode</th>
                 <th>Port policy</th>
                 <th>Tags</th>
@@ -176,7 +227,7 @@ export function PortsPage() {
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={9}>
                     <Empty title="No ports match" />
                   </td>
                 </tr>
@@ -206,7 +257,19 @@ export function PortsPage() {
                         <span className="mono" style={{ fontWeight: 500 }}>{r.port['port-name']}</span>
                         {r.port.__pending && <span className={`op-kind ${r.port.__pending}`}>{r.port.__pending}</span>}
                       </div>
-                      <div className="xs dim mono truncate">{r.switchId}</div>
+                      <div className="xs dim mono truncate" title={r.switchDesc}>{r.switchId}</div>
+                    </td>
+                    <td>
+                      <LinkCell row={r} />
+                    </td>
+                    <td className="xs">
+                      {r.port.description ? (
+                        <span className="truncate" title={r.port.description} style={{ display: 'block' }}>
+                          {r.port.description}
+                        </span>
+                      ) : (
+                        <span className="dim">—</span>
+                      )}
                     </td>
                     <td>
                       <span className={`badge ${mode === 'dynamic' ? 'green' : mode === 'nac' ? 'violet' : 'gray'}`}>{mode}</span>
@@ -302,6 +365,48 @@ export function PortsPage() {
   );
 }
 
+/**
+ * Link-Zustand eines Ports.
+ *
+ * Bewusst getrennt vom administrativen Zustand: Ein Port kann konfigurativ
+ * abgeschaltet sein (CMDB ports.status = down) oder schlicht nichts
+ * angeschlossen haben (Monitor: link down). Das sind verschiedene Befunde und
+ * fuehren zu verschiedenen Massnahmen.
+ */
+function LinkCell({ row }: { row: Row }) {
+  if (row.adminDown) {
+    return (
+      <span className="badge red" title="Administratively disabled in the switch configuration (set status down)">
+        admin down
+      </span>
+    );
+  }
+
+  if (!row.status) {
+    return (
+      <span className="dim xs" title="No live status available for this port">
+        —
+      </span>
+    );
+  }
+
+  const up = row.status.link === 'up';
+  const speed = linkSpeed(row.status.speed);
+  const poe = row.status.portPower && row.status.portPower > 0 ? `${row.status.portPower} W PoE` : null;
+
+  return (
+    <div title={[up ? 'Link up' : 'Link down', speed, row.status.duplex ? `${row.status.duplex} duplex` : '', poe].filter(Boolean).join(' · ')}>
+      <div className="row" style={{ gap: 6 }}>
+        <span className={`dot ${up ? 'on' : 'off'}`} />
+        <span className="xs" style={{ fontWeight: up ? 500 : 400, color: up ? undefined : 'var(--text-dim)' }}>
+          {up ? speed || 'up' : 'down'}
+        </span>
+      </div>
+      {poe && <div className="xs dim">{poe}</div>}
+    </div>
+  );
+}
+
 function AssignModal({
   rows,
   dppNames,
@@ -317,6 +422,7 @@ function AssignModal({
   const [policy, setPolicy] = useState(dppNames[0] ?? '');
 
   const withDevices = rows.filter((r) => r.devices > 0);
+  const adminDown = rows.filter((r) => r.adminDown);
   const ok = mode === 'static' || !!policy;
 
   return (
@@ -373,11 +479,19 @@ function AssignModal({
         </Note>
       )}
 
+      {adminDown.length > 0 && (
+        <Note kind="warn">
+          {pluralize(adminDown.length, 'selected port is', 'selected ports are')} administratively down. The policy will be
+          stored, but nothing happens there until the port is enabled again.
+        </Note>
+      )}
+
       <div className="panel">
         <table className="tbl">
           <thead>
             <tr>
               <th>Port</th>
+              <th>Link</th>
               <th>Now</th>
               <th>After</th>
             </tr>
@@ -385,8 +499,14 @@ function AssignModal({
           <tbody>
             {rows.slice(0, 40).map((r) => (
               <tr key={`${r.switchId}|${r.port['port-name']}`}>
-                <td className="mono xs">
-                  {r.switchId} / {r.port['port-name']}
+                <td>
+                  <div className="mono xs">
+                    {r.switchId} / {r.port['port-name']}
+                  </div>
+                  {r.port.description && <div className="xs dim truncate">{r.port.description}</div>}
+                </td>
+                <td>
+                  <LinkCell row={r} />
                 </td>
                 <td className="xs dim">
                   {r.port['access-mode'] ?? 'static'}

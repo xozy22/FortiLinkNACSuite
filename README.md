@@ -345,9 +345,22 @@ policy is still in use.
 
 ### Port Assignment
 
-Every port of every managed switch with its `access-mode`, assigned policy, tags, connected devices
-and the rule that matched there. Multi-select to switch ports to dynamic access mode and attach a
-policy in one operation. Per port, a **bounce** action forces connected devices to be re-evaluated.
+Every port of every managed switch with its link state, description, `access-mode`, assigned policy,
+tags, connected devices and the rule that matched there. Multi-select to switch ports to dynamic
+access mode and attach a policy in one operation. Per port, a **bounce** action forces connected
+devices to be re-evaluated.
+
+The **Link** column keeps two things apart that FortiOS both calls "status":
+
+| Shown as | Source | Meaning |
+|---|---|---|
+| `admin down` | CMDB `ports.status = down` | Disabled in the configuration. A policy can be attached, but nothing will happen there. |
+| green dot + speed | Monitor `managed-switch/status` → `ports[].status` | Link is up. PoE draw is shown underneath when the port is delivering power. |
+| grey dot + `down` | same | Port is enabled but nothing is connected. |
+| `—` | — | No live status available, e.g. the monitor endpoint could not be read. |
+
+Port descriptions come from the configuration (`ports.description`) and are searchable, so patch
+panel labels like *"Buero 1.02 — Dose A"* are enough to find a port.
 
 ### Dashboard
 
@@ -454,6 +467,7 @@ Everything is read through the FortiGate REST API. No SSH, no CLI, no configurat
 | `GET monitor/switch-controller/matched-devices?include_dynamic=true` | The rule actually applied |
 | `GET monitor/switch-controller/nac-device/stats` | Matched device count against the hardware limit |
 | `GET monitor/switch-controller/known-nac-device-criteria-list` | Fortinet's device templates |
+| `GET monitor/switch-controller/managed-switch/status` | Live link state, speed, duplex and PoE draw per port |
 | `POST monitor/switch-controller/managed-switch/bounce-port` | Re-trigger evaluation on a port |
 
 **Read (CMDB)**

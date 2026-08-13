@@ -16,6 +16,10 @@ export default defineConfig({
     },
   },
   server: {
+    // Ohne explizite Bindung loest Node "localhost" je nach System zu ::1 auf und
+    // Vite lauscht dann nur auf IPv6 – 127.0.0.1 laeuft ins Leere. Fuer Zugriff
+    // von anderen Rechnern: npm run dev -- --host
+    host: '127.0.0.1',
     port: uiPort,
     strictPort: true,
     proxy: {

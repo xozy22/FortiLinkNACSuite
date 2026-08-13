@@ -270,8 +270,48 @@ app.get('/api/refdata', async (req, res) => {
     out._knownCriteria = [];
   }
 
+  // Live-Portzustand. Die CMDB kennt nur den administrativen Zustand
+  // (ports.status) – ob der Link wirklich steht, sagt nur der Monitor.
+  out._portStatus = await readPortStatus(call);
+
   res.json(out);
 });
+
+/**
+ * Liest den operativen Portzustand und indiziert ihn als "switchId|portName".
+ * Faellt der Endpunkt aus, bleibt die Karte leer – die Seite zeigt dann
+ * schlicht keinen Link-Zustand an, statt zu raten.
+ */
+async function readPortStatus(call) {
+  try {
+    const r = await call('monitor/switch-controller/managed-switch/status');
+    if (!r.ok) return {};
+    const switches = Array.isArray(r.data?.results) ? r.data.results : [];
+    const out = {};
+    for (const sw of switches) {
+      const id = sw['switch-id'] ?? sw.switch_id ?? sw.serial;
+      if (!id) continue;
+      for (const p of sw.ports ?? []) {
+        if (!p.interface) continue;
+        out[`${id}|${p.interface}`] = {
+          link: String(p.status ?? '').toLowerCase(),
+          speed: Number.isFinite(p.speed) ? p.speed : null,
+          duplex: p.duplex ?? null,
+          poeStatus: p.poe_status ?? null,
+          poeCapable: p.poe_capable === true,
+          portPower: Number.isFinite(p.port_power) ? p.port_power : null,
+          powerStatus: Number.isFinite(p.power_status) ? p.power_status : null,
+          stp: p.stp_status ?? null,
+          isFortiLink: p.fortilink_port === true,
+          islPeer: p.isl_peer_device_name || null,
+        };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
 
 /** Einzelne Tabelle frisch lesen (nach einem Apply). */
 app.get('/api/objects/*', async (req, res) => {

@@ -172,6 +172,22 @@ export interface SystemInterface {
   'switch-controller-feature'?: string;
 }
 
+/** Operativer Portzustand aus dem Monitor – nicht zu verwechseln mit ports.status aus der CMDB. */
+export interface PortStatus {
+  /** Link-Zustand laut FortiSwitch: "up" | "down". */
+  link: string;
+  /** Aushandelte Geschwindigkeit in Mbit/s. */
+  speed: number | null;
+  duplex: string | null;
+  poeStatus: string | null;
+  poeCapable: boolean;
+  portPower: number | null;
+  powerStatus: number | null;
+  stp: string | null;
+  isFortiLink: boolean;
+  islPeer: string | null;
+}
+
 export interface KnownCriteria {
   name: string;
   description: string;
@@ -189,6 +205,8 @@ export interface RefData {
   'system/interface': { results: SystemInterface[]; error?: string };
   _nacStats: { vdom_count: number; total_count: number; max_limit: number } | null;
   _knownCriteria: KnownCriteria[];
+  /** Indiziert als "switchId|portName". */
+  _portStatus: Record<string, PortStatus>;
 }
 
 // --- Changeset -------------------------------------------------------------

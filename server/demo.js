@@ -302,6 +302,39 @@ function port(name, over) {
   };
 }
 
+// Port-Beschreibungen, wie sie in einer gepflegten Anlage stehen wuerden.
+const PORT_DESC = {
+  'S248EF0000001|port1': 'Buero 1.01 - Dose A',
+  'S248EF0000001|port2': 'Buero 1.01 - Dose B',
+  'S248EF0000001|port3': 'Buero 1.02 - Dose A',
+  'S248EF0000001|port4': 'Buero 1.02 - Dose B',
+  'S248EF0000001|port5': 'Logistik - Drucker',
+  'S248EF0000001|port6': 'Buero 1.03 - Drucker',
+  'S248EF0000001|port7': 'Empfang - Drucker',
+  'S248EF0000001|port8': 'Kamera Eingang Nord',
+  'S248EF0000001|port9': 'Kamera Lager',
+  'S248EF0000001|port10': 'Buchhaltung AP1',
+  'S248EF0000001|port11': 'Einkauf AP1',
+  'S248EF0000001|port12': 'Vertrieb Dockingstation',
+  'S248EF0000001|port13': 'FortiAP EG',
+  'S248EF0000001|port14': 'Besprechungsraum - frei',
+  'S248EF0000001|port20': 'DEFEKT - nicht patchen',
+  'S248EF0000001|port23': 'Uplink FortiGate port3',
+  'S248EF0000001|port24': 'Uplink FortiGate port4 (LACP)',
+  'S124EN0000002|port1': 'Buero 2.01 - Drucker',
+  'S124EN0000002|port2': 'Kamera Parkplatz',
+  'S124EN0000002|port3': 'Kamera Hof',
+  'S124EN0000002|port4': 'Technik AP1',
+  'S124EN0000002|port5': 'Empfang AP1',
+  'S124EN0000002|port6': 'Schaltschrank Halle 1',
+  'S124EN0000002|port9': 'Laborplatz 1',
+  'S124EN0000002|port10': 'Laborplatz 2',
+  'S124EN0000002|port11': 'FortiAP OG',
+  'S124EN0000002|port12': 'Uplink zu S248EF0000001',
+};
+
+const withDesc = (switchId, p) => ({ ...p, description: PORT_DESC[`${switchId}|${p['port-name']}`] ?? p.description ?? '' });
+
 const SWITCHES = [
   {
     'switch-id': 'S248EF0000001',
@@ -316,10 +349,13 @@ const SWITCHES = [
           'interface-tags': [{ 'tag-name': 'access-floor1' }],
         })
       ),
-      ...Array.from({ length: 10 }, (_, i) => port(`port${i + 13}`)),
+      ...Array.from({ length: 10 }, (_, i) =>
+        // port20 ist administrativ abgeschaltet – der interessante Sonderfall.
+        port(`port${i + 13}`, i + 13 === 20 ? { status: 'down' } : {})
+      ),
       port('port23', { 'interface-tags': [{ 'tag-name': 'uplink' }], 'lldp-profile': 'default-auto-isl' }),
       port('port24', { 'interface-tags': [{ 'tag-name': 'uplink' }], 'lldp-profile': 'default-auto-isl' }),
-    ],
+    ].map((p) => withDesc('S248EF0000001', p)),
   },
   {
     'switch-id': 'S124EN0000002',
@@ -339,7 +375,7 @@ const SWITCHES = [
       ),
       port('port11'),
       port('port12', { 'interface-tags': [{ 'tag-name': 'uplink' }] }),
-    ],
+    ].map((p) => withDesc('S124EN0000002', p)),
   },
 ];
 
@@ -557,26 +593,52 @@ export function createDemoStore() {
       });
     }
 
+    // Feldnamen und Semantik folgen dem FortiOS-Monitor-Schema: "status" ist hier
+    // der LINK-Zustand, nicht der administrative aus der CMDB.
     if (path === 'monitor/switch-controller/managed-switch/status') {
-      return ok({
-        results: db['switch-controller/managed-switch'].map((s) => ({
-          switch_id: s['switch-id'],
-          serial: s.sn,
-          name: s.description,
-          state: 'Authorized',
-          status: 'Connected',
-          os_version: 'S248EF-v7.6.3-build1059',
-          ports: s.ports.map((p) => ({
-            interface: p['port-name'],
-            status: p.status,
-            duplex: 'full',
-            speed: 1000,
-            poe_capable: true,
-            port_power: 0,
+      const occupied = new Set(PLACEMENT.map(([, sw, p]) => `${sw}|${p}`));
+      const results = db['switch-controller/managed-switch'].map((s) => ({
+        serial: s.sn,
+        'switch-id': s['switch-id'],
+        fgt_peer_intf_name: 'fortilink',
+        state: 'Authorized',
+        status: 'Connected',
+        os_version: 'S248EF-v7.6.3-build1059',
+        connecting_from: 'port24',
+        join_time: 'Mon Aug 11 06:12:44 2026',
+        max_poe_budget: 370,
+        ports: s.ports.map((p) => {
+          const name = p['port-name'];
+          const key = `${s['switch-id']}|${name}`;
+          const isUplink = (p['interface-tags'] ?? []).some((t) => t['tag-name'] === 'uplink');
+          const adminDown = p.status === 'down';
+          // Link steht, wo ein Geraet haengt oder ein Uplink konfiguriert ist.
+          const up = !adminDown && (occupied.has(key) || isUplink);
+          const poeDraw = up && !isUplink ? Number((3 + (name.length % 5) * 1.7).toFixed(1)) : 0;
+          return {
+            interface: name,
+            status: up ? 'up' : 'down',
+            duplex: up ? 'full' : 'half',
+            speed: up ? (isUplink ? 10000 : 1000) : 0,
+            fortilink_port: isUplink,
             vlan: p.vlan,
-          })),
-        })),
-      });
+            poe_capable: !isUplink,
+            poe_status: p['poe-status'] === 'enable' && !isUplink ? 'enabled' : 'disabled',
+            port_power: poeDraw,
+            power_status: poeDraw > 0 ? 2 : 0,
+            stp_status: up ? 'forwarding' : 'disabled',
+            isl_peer_device_name: isUplink ? 'FGT-DEMO' : '',
+            isl_peer_port_name: '',
+            isl_peer_trunk_name: '',
+            fgt_peer_device_name: isUplink ? 'FGT-DEMO' : '',
+            mclag: false,
+            mclag_icl: false,
+            supported_port_speeds: ['10half', '100full', '1000full'],
+          };
+        }),
+      }));
+      const filtered = query.mkey ? results.filter((r) => r['switch-id'] === query.mkey) : results;
+      return ok({ results: filtered });
     }
 
     if (path === 'monitor/switch-controller/managed-switch/bounce-port' && method === 'POST') {
