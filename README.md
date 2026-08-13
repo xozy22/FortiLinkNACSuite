@@ -362,6 +362,12 @@ The **Link** column keeps two things apart that FortiOS both calls "status":
 Port descriptions come from the configuration (`ports.description`) and are searchable, so patch
 panel labels like *"Buero 1.02 — Dose A"* are enough to find a port.
 
+**Devices seen** is not just a count — hovering it (or focusing it with the keyboard) lists the
+actual devices on that port with hostname, MAC, IP, classification, VLAN and the rule each one
+matched. That matters because more than one device per port is the normal case in a voice
+deployment: the desk phone and the PC behind it sit on the same port and are usually caught by two
+different rules.
+
 ### Dashboard
 
 Devices detected, coverage percentage, ports under NAC, and matched device slots against the

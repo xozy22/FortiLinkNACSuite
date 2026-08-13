@@ -1106,6 +1106,111 @@
 }
 
 /* --------------------------------------------------------------------------
+   Hover-Karte
+   -------------------------------------------------------------------------- */
+.hovercard-trigger {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--r-sm);
+}
+
+.hovercard-trigger:hover .badge {
+  border-color: var(--accent-line);
+  color: var(--text);
+}
+
+.hovercard {
+  position: fixed;
+  z-index: 150;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: hovercard-in 0.1s ease-out;
+}
+
+@keyframes hovercard-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+.hovercard-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  background: var(--bg-panel-2);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.hovercard-body {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.hovercard-foot {
+  padding: 6px 11px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-panel-2);
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+/* Eine Geraetezeile in der Karte */
+.hc-row {
+  display: flex;
+  gap: 9px;
+  padding: 8px 11px;
+  align-items: flex-start;
+}
+
+.hc-row + .hc-row {
+  border-top: 1px solid var(--border-soft);
+}
+
+.hc-row .hc-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.hc-row .hc-name {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hc-row .hc-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.hc-row .hc-side {
+  text-align: right;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+/* --------------------------------------------------------------------------
    Modal
    -------------------------------------------------------------------------- */
 .modal-backdrop {

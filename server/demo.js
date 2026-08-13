@@ -261,6 +261,11 @@ const DEVICES = [
   dev('8c:16:45:40:00:04', { hardware_vendor: 'Lenovo', hardware_type: 'Windows PC', hardware_family: 'ThinkPad', os_name: 'Windows', os_version: '10 22H2', hostname: 'NB-TECHNIK-1', ipv4_address: '10.10.10.54' }),
   dev('8c:16:45:40:00:05', { hardware_vendor: 'Lenovo', hardware_type: 'Windows PC', hardware_family: 'ThinkCentre', os_name: 'Windows', os_version: '11 23H2', hostname: 'WS-EMPFANG', ipv4_address: '10.10.10.55', is_online: false, last_seen: 260_000 }),
 
+  // PCs hinter den Tischtelefonen – der Regelfall in einer Voice-Installation:
+  // zwei MACs an einem Port, Telefon getaggt im Voice-VLAN, PC untagged.
+  dev('a4:bb:6d:40:00:06', { hardware_vendor: 'Dell', hardware_type: 'Windows PC', hardware_family: 'OptiPlex', os_name: 'Windows', os_version: '11 23H2', hostname: 'WS-TELEFONIE-1', ipv4_address: '10.10.10.61' }),
+  dev('a4:bb:6d:40:00:07', { hardware_vendor: 'Dell', hardware_type: 'Windows PC', hardware_family: 'OptiPlex', os_name: 'Windows', os_version: '11 23H2', hostname: 'WS-TELEFONIE-2', ipv4_address: '10.10.10.62', is_online: false, last_seen: 5400 }),
+
   // Access Points
   dev('90:6c:ac:50:00:01', { hardware_vendor: 'Fortinet', hardware_type: 'Wireless AP', hardware_family: 'FortiAP', os_name: 'FortiAP', os_version: '7.4.4', hostname: 'FAP-EG-01', ipv4_address: '10.10.50.11' }),
   dev('90:6c:ac:50:00:02', { hardware_vendor: 'Fortinet', hardware_type: 'Wireless AP', hardware_family: 'FortiAP', os_name: 'FortiAP', os_version: '7.4.4', hostname: 'FAP-OG-01', ipv4_address: '10.10.50.12' }),
@@ -383,6 +388,9 @@ const SWITCHES = [
 const PLACEMENT = [
   ['00:09:0f:aa:10:01', 'S248EF0000001', 'port1', 20],
   ['00:09:0f:aa:10:02', 'S248EF0000001', 'port2', 20],
+  // Dieselben Ports wie die Telefone darueber – PC haengt am Switch des Telefons.
+  ['a4:bb:6d:40:00:06', 'S248EF0000001', 'port1', 10],
+  ['a4:bb:6d:40:00:07', 'S248EF0000001', 'port2', 10],
   ['80:5e:c0:bb:20:11', 'S248EF0000001', 'port3', 20],
   ['80:5e:c0:bb:20:12', 'S248EF0000001', 'port4', 20],
   ['3c:2a:f4:11:00:01', 'S248EF0000001', 'port5', 30],

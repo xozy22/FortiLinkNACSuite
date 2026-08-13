@@ -6,17 +6,18 @@
 // Diese Seite zeigt den Ist-Zustand pro Port und erlaubt die Zuweisung in Serie.
 // ---------------------------------------------------------------------------
 import { useMemo, useState } from 'react';
-import { Plug, RefreshCcw, Zap } from 'lucide-react';
+import { Plug, RefreshCcw, Users, Zap } from 'lucide-react';
 import { useBouncePort, useInventory, useRefData } from '@/api/hooks';
 import { useChangeset } from '@/state/changeset';
 import { useToast } from '@/state/toast';
-import type { PortStatus, SwitchPort } from '@/api/types';
+import type { Asset, PortStatus, SwitchPort } from '@/api/types';
 import { Empty, ErrorBox, Loading, Modal, Note } from '@/components/common';
 import { applyFilter, emptyFilter, FilterBar, type FacetDef, type FilterState } from '@/components/FilterBar';
 import { SelectField } from '@/components/fields';
+import { HoverCard } from '@/components/HoverCard';
 import { projectDpps, projectSwitches, type Pending } from '@/lib/project';
 import { setPort } from '@/lib/ops';
-import { linkSpeed, members, pluralize } from '@/lib/format';
+import { linkSpeed, members, pluralize, relTime } from '@/lib/format';
 
 interface Row {
   switchId: string;
@@ -26,7 +27,8 @@ interface Row {
   status: PortStatus | null;
   /** Administrativ abgeschaltet (CMDB ports.status = down). */
   adminDown: boolean;
-  devices: number;
+  /** Die Geraete an diesem Port – nicht nur ihre Anzahl. */
+  devices: Asset[];
   matchedRules: string[];
 }
 
@@ -81,14 +83,19 @@ export function PortsPage() {
 
   const rows = useMemo<Row[]>(() => {
     const assets = inventory?.assets ?? [];
-    const byPort = new Map<string, { n: number; rules: Set<string> }>();
+    const byPort = new Map<string, Asset[]>();
     for (const a of assets) {
       if (!a.switchId || !a.portName) continue;
       const k = `${a.switchId}|${a.portName}`;
-      const e = byPort.get(k) ?? { n: 0, rules: new Set<string>() };
-      e.n++;
-      if (a.matchedRule) e.rules.add(a.matchedRule);
-      byPort.set(k, e);
+      const list = byPort.get(k);
+      if (list) list.push(a);
+      else byPort.set(k, [a]);
+    }
+    // Online zuerst, dann nach Name – so steht oben, was gerade zaehlt.
+    for (const list of byPort.values()) {
+      list.sort(
+        (x, y) => Number(y.online) - Number(x.online) || (x.hostname || x.macDisplay).localeCompare(y.hostname || y.macDisplay)
+      );
     }
 
     const statusMap = ref?._portStatus ?? {};
@@ -96,15 +103,15 @@ export function PortsPage() {
     return switches.flatMap((sw) =>
       (sw.ports ?? []).map((p) => {
         const k = `${sw['switch-id']}|${p['port-name']}`;
-        const e = byPort.get(k);
+        const devices = byPort.get(k) ?? [];
         return {
           switchId: sw['switch-id'],
           switchDesc: sw.description ?? '',
           port: p as Pending<SwitchPort>,
           status: statusMap[k] ?? null,
           adminDown: p.status === 'down',
-          devices: e?.n ?? 0,
-          matchedRules: [...(e?.rules ?? [])],
+          devices,
+          matchedRules: [...new Set(devices.map((d) => d.matchedRule).filter(Boolean))],
         };
       })
     );
@@ -296,17 +303,7 @@ export function PortsPage() {
                       )}
                     </td>
                     <td className="xs">
-                      {r.devices === 0 ? (
-                        <span className="dim">none</span>
-                      ) : (
-                        <>
-                          <span className="badge gray mono">{r.devices}</span>{' '}
-                          {r.matchedRules.length > 0 && <span className="dim">{r.matchedRules.join(', ')}</span>}
-                          {r.matchedRules.length === 0 && mode === 'dynamic' && (
-                            <span style={{ color: 'var(--amber)' }}>no rule matched</span>
-                          )}
-                        </>
-                      )}
+                      <DevicesCell row={r} mode={mode} />
                     </td>
                     <td>
                       <button
@@ -366,6 +363,105 @@ export function PortsPage() {
 }
 
 /**
+ * Die Geraete an einem Port. Die Zahl allein beantwortet die eigentliche Frage
+ * nicht – beim Hovern (oder per Tastaturfokus) kommt die Liste mit Identitaet,
+ * Adresse und getroffener Regel.
+ */
+function DevicesCell({ row, mode }: { row: Row; mode: string }) {
+  const n = row.devices.length;
+
+  if (n === 0) {
+    return mode === 'dynamic' && !row.adminDown && row.status?.link === 'up' ? (
+      <span className="dim" title="The link is up but the FortiGate has not classified a device here yet">
+        link up, no device seen
+      </span>
+    ) : (
+      <span className="dim">none</span>
+    );
+  }
+
+  const online = row.devices.filter((d) => d.online).length;
+  const unmatched = row.devices.filter((d) => !d.matchedRule).length;
+
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+      <HoverCard
+        width={430}
+        label={`Show the ${pluralize(n, 'device')} on ${row.switchId} ${row.port['port-name']}`}
+        content={<DevicePopover row={row} />}
+      >
+        <span className="badge gray mono">
+          <Users size={9} /> {n}
+        </span>
+        {online < n && <span className="xs dim">{online} online</span>}
+      </HoverCard>
+
+      {row.matchedRules.length > 0 && (
+        <span className="dim truncate" title={row.matchedRules.join(', ')}>
+          {row.matchedRules.join(', ')}
+        </span>
+      )}
+      {unmatched > 0 && mode === 'dynamic' && (
+        <span style={{ color: 'var(--amber)' }}>{unmatched === n ? 'no rule matched' : `${unmatched} unmatched`}</span>
+      )}
+    </div>
+  );
+}
+
+function DevicePopover({ row }: { row: Row }) {
+  const shown = row.devices.slice(0, 10);
+  const rest = row.devices.length - shown.length;
+
+  return (
+    <>
+      <div className="hovercard-head">
+        <Users size={12} />
+        <span>
+          {pluralize(row.devices.length, 'device')} on {row.port['port-name']}
+        </span>
+        <div className="spacer" />
+        <span className="mono" style={{ fontWeight: 400 }}>
+          {row.switchId}
+        </span>
+      </div>
+
+      <div className="hovercard-body">
+        {shown.map((d) => (
+          <div className="hc-row" key={d.mac}>
+            <span className={`dot ${d.online ? 'on' : 'off'}`} style={{ marginTop: 6 }} />
+            <div className="hc-main">
+              <div className="hc-name truncate">
+                {d.hostname || <span className="dim">unnamed</span>}
+                {d.vlanId !== null && <span className="badge gray">vlan {d.vlanId}</span>}
+              </div>
+              <div className="hc-meta mono truncate">
+                {d.macDisplay}
+                {d.ipv4 && ` · ${d.ipv4}`}
+              </div>
+              <div className="hc-meta truncate">
+                {[d.vendor, d.type, d.family].filter(Boolean).join(' · ') || <span className="dim">unidentified</span>}
+              </div>
+            </div>
+            <div className="hc-side">
+              {d.matchedRule ? (
+                <span className="badge green" title={`Matched by ${d.matchedDpp} / ${d.matchedRule}`}>
+                  {d.matchedRule}
+                </span>
+              ) : (
+                <span className="badge amber">no rule</span>
+              )}
+              <span className="xs dim">{d.online ? relTime(d.lastSeen) : `offline · ${relTime(d.lastSeen)}`}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {rest > 0 && <div className="hovercard-foot">and {rest} more — open the Assets page for the full list</div>}
+    </>
+  );
+}
+
+/**
  * Link-Zustand eines Ports.
  *
  * Bewusst getrennt vom administrativen Zustand: Ein Port kann konfigurativ
@@ -421,7 +517,7 @@ function AssignModal({
   const [mode, setMode] = useState<'dynamic' | 'static'>('dynamic');
   const [policy, setPolicy] = useState(dppNames[0] ?? '');
 
-  const withDevices = rows.filter((r) => r.devices > 0);
+  const withDevices = rows.filter((r) => r.devices.length > 0);
   const adminDown = rows.filter((r) => r.adminDown);
   const ok = mode === 'static' || !!policy;
 
