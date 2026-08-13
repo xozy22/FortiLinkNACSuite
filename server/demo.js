@@ -275,6 +275,18 @@ const DEVICES = [
   dev('00:0c:29:70:00:01', { hardware_vendor: 'VMware', hardware_type: 'Server', hardware_family: 'Virtual Machine', os_name: 'Linux', os_version: 'Debian 12', hostname: 'srv-monitoring', ipv4_address: '10.10.10.200' }),
   dev('b8:27:eb:80:00:01', { hardware_vendor: 'Raspberry Pi Foundation', hardware_type: 'Linux PC', hardware_family: 'Raspberry Pi', os_name: 'Linux', os_version: 'Raspbian 12', hostname: 'rpi-signage', ipv4_address: '10.10.10.201' }),
 
+  // Tischswitch im Besprechungsraum – viele MACs hinter einem Port. Der Fall,
+  // wegen dem man NAC ueberhaupt betreibt, und der Grund fuer eine scrollbare Liste.
+  dev('3c:52:82:90:00:01', { hardware_vendor: 'Dell', hardware_type: 'Windows PC', hardware_family: 'Latitude', os_name: 'Windows', os_version: '11 24H2', hostname: 'NB-GAST-01', ipv4_address: '10.10.10.120' }),
+  dev('3c:52:82:90:00:02', { hardware_vendor: 'Dell', hardware_type: 'Windows PC', hardware_family: 'Latitude', os_name: 'Windows', os_version: '11 24H2', hostname: 'NB-GAST-02', ipv4_address: '10.10.10.121' }),
+  dev('f4:d4:88:90:00:03', { hardware_vendor: 'Apple', hardware_type: 'Mac', hardware_family: 'MacBook Pro', os_name: 'macOS', os_version: '15.2', hostname: 'MBP-DESIGN', ipv4_address: '10.10.10.122' }),
+  dev('f4:d4:88:90:00:04', { hardware_vendor: 'Apple', hardware_type: 'Mac', hardware_family: 'MacBook Air', os_name: 'macOS', os_version: '15.1', hostname: 'MBA-MARKETING', ipv4_address: '10.10.10.123', is_online: false, last_seen: 3300 }),
+  dev('8c:16:45:90:00:05', { hardware_vendor: 'Lenovo', hardware_type: 'Windows PC', hardware_family: 'ThinkPad', os_name: 'Windows', os_version: '11 23H2', hostname: 'NB-EXTERN-1', ipv4_address: '10.10.10.124' }),
+  dev('00:e0:4c:90:00:06', { hardware_vendor: 'Realtek', hardware_type: '', hostname: '', ipv4_address: '10.10.10.125', host_src: '', is_fortiguard_src: false }),
+  dev('54:2a:1b:90:00:07', { hardware_vendor: 'Logitech', hardware_type: 'Video Conferencing', hardware_family: 'Rally', hostname: 'RALLY-BESPR-1', ipv4_address: '10.10.10.126' }),
+  dev('b0:be:76:90:00:08', { hardware_vendor: 'TP-Link', hardware_type: 'Switch', hostname: '', ipv4_address: '10.10.10.127', host_src: '', is_fortiguard_src: false }),
+  dev('e4:5f:01:90:00:09', { hardware_vendor: 'Raspberry Pi Foundation', hardware_type: 'Linux PC', hardware_family: 'Raspberry Pi', os_name: 'Linux', os_version: 'Raspbian 12', hostname: 'rpi-raumanzeige', ipv4_address: '10.10.10.128' }),
+
   // Unbekannt / ohne Zuordnung
   dev('4a:1c:88:99:aa:01', { hardware_vendor: '', hardware_type: '', hostname: '', ipv4_address: '10.10.100.61', host_src: '', is_fortiguard_src: false }),
   dev('6e:32:11:5f:cd:02', { hardware_vendor: '', hardware_type: '', hostname: '', ipv4_address: '10.10.100.62', host_src: '', is_fortiguard_src: false }),
@@ -322,7 +334,7 @@ const PORT_DESC = {
   'S248EF0000001|port11': 'Einkauf AP1',
   'S248EF0000001|port12': 'Vertrieb Dockingstation',
   'S248EF0000001|port13': 'FortiAP EG',
-  'S248EF0000001|port14': 'Besprechungsraum - frei',
+  'S248EF0000001|port14': 'Besprechungsraum gross - Tischswitch',
   'S248EF0000001|port20': 'DEFEKT - nicht patchen',
   'S248EF0000001|port23': 'Uplink FortiGate port3',
   'S248EF0000001|port24': 'Uplink FortiGate port4 (LACP)',
@@ -414,6 +426,16 @@ const PLACEMENT = [
   ['4a:1c:88:99:aa:01', 'S124EN0000002', 'port7', 99],
   ['6e:32:11:5f:cd:02', 'S124EN0000002', 'port8', 99],
   ['f0:9f:c2:aa:bb:03', 'S248EF0000001', 'port14', 10],
+  // Alle hinter dem Tischswitch an port14
+  ['3c:52:82:90:00:01', 'S248EF0000001', 'port14', 10],
+  ['3c:52:82:90:00:02', 'S248EF0000001', 'port14', 10],
+  ['f4:d4:88:90:00:03', 'S248EF0000001', 'port14', 10],
+  ['f4:d4:88:90:00:04', 'S248EF0000001', 'port14', 10],
+  ['8c:16:45:90:00:05', 'S248EF0000001', 'port14', 10],
+  ['00:e0:4c:90:00:06', 'S248EF0000001', 'port14', 10],
+  ['54:2a:1b:90:00:07', 'S248EF0000001', 'port14', 10],
+  ['b0:be:76:90:00:08', 'S248EF0000001', 'port14', 10],
+  ['e4:5f:01:90:00:09', 'S248EF0000001', 'port14', 10],
 ];
 
 // ---------------------------------------------------------------------------

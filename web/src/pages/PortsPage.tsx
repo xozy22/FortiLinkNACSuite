@@ -409,7 +409,9 @@ function DevicesCell({ row, mode }: { row: Row; mode: string }) {
 }
 
 function DevicePopover({ row }: { row: Row }) {
-  const shown = row.devices.slice(0, 10);
+  // Die Liste scrollt, deshalb ist ein enger Deckel unnoetig – erst bei sehr
+  // vielen MACs an einem Port verweisen wir auf die Assets-Seite.
+  const shown = row.devices.slice(0, 25);
   const rest = row.devices.length - shown.length;
 
   return (

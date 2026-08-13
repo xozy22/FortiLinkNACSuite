@@ -1160,6 +1160,9 @@
 .hovercard-body {
   max-height: 340px;
   overflow-y: auto;
+  /* Am Listenende nicht auf die Seite dahinter durchscrollen – das wuerde die
+     Karte neu positionieren, waehrend man noch liest. */
+  overscroll-behavior: contain;
 }
 
 .hovercard-foot {

@@ -54,13 +54,14 @@ export function HoverCard({
 
   useEffect(() => () => clearTimers(), []);
 
-  // Position erst nach dem Rendern bestimmen – vorher ist die Hoehe unbekannt.
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
-    const r = triggerRef.current.getBoundingClientRect();
-    const h = cardRef.current?.offsetHeight ?? 240;
+  /** Karte am Ausloeser ausrichten. */
+  const place = useCallback(() => {
+    const t = triggerRef.current;
+    if (!t) return;
+    const r = t.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const h = cardRef.current?.offsetHeight ?? 240;
 
     let left = r.right + GAP;
     if (left + width > vw - MARGIN) left = r.left - width - GAP; // links daneben
@@ -71,24 +72,53 @@ export function HoverCard({
     if (top < MARGIN) top = MARGIN;
 
     setPos({ top, left });
-  }, [open, width]);
+  }, [width]);
 
-  // Beim Scrollen schliessen – eine mitwandernde Karte ist irritierender als keine.
+  // Position erst nach dem Rendern bestimmen – vorher ist die Hoehe unbekannt.
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, place]);
+
+  // Ist der Ausloeser nicht mehr sichtbar – aus dem Viewport oder von einem
+  // scrollenden Container abgeschnitten – schliessen. Eine Karte ohne sichtbaren
+  // Bezugspunkt zeigt auf nichts. Der Observer beruecksichtigt beide Faelle,
+  // eine reine Viewport-Pruefung wuerde das Wegscrollen in der Tabelle uebersehen.
+  useEffect(() => {
+    const t = triggerRef.current;
+    if (!open || !t) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) hide(true);
+      },
+      { threshold: 0 }
+    );
+    io.observe(t);
+    return () => io.disconnect();
+  }, [open, hide]);
+
   useEffect(() => {
     if (!open) return;
-    const close = () => hide(true);
+
+    // Scrollen INNERHALB der Karte darf sie nicht schliessen – sonst laesst sich
+    // eine lange Liste nicht lesen. Nur Scrollen dahinter richtet sie neu aus.
+    const onScroll = (e: Event) => {
+      const target = e.target as Node | null;
+      if (target && cardRef.current?.contains(target)) return;
+      place();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') hide(true);
     };
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
+
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', place);
     document.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', place);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, hide]);
+  }, [open, hide, place]);
 
   return (
     <>
@@ -100,7 +130,11 @@ export function HoverCard({
         aria-expanded={open}
         aria-describedby={open ? id : undefined}
         onMouseEnter={() => show()}
-        onMouseLeave={() => hide()}
+        // Hat der Ausloeser den Tastaturfokus, darf ein abwanderndes Mauszeigern
+        // die Karte nicht wegnehmen – geschlossen wird dann per Blur oder Escape.
+        onMouseLeave={() => {
+          if (document.activeElement !== triggerRef.current) hide();
+        }}
         onFocus={() => show(true)}
         onBlur={() => hide(true)}
         onClick={() => (open ? hide(true) : show(true))}
