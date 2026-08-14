@@ -325,6 +325,25 @@ Position defaults to *before the catch-all*, because a rule appended after one n
 Fortinet's own device templates (`monitor/switch-controller/known-nac-device-criteria-list`) are
 available as a starting point in the rule editor.
 
+### Replacing a device
+
+When a device dies, its replacement has a different MAC address and every rule matching the old one
+silently stops working. **Replace device** rewrites them in one step: enter or pick the old address,
+pick the replacement, and every rule across every policy that matches the old MAC is restaged
+against the new one. Only the `mac` field changes — name, VLAN policy and all other actions stay,
+so the replacement is treated exactly like its predecessor.
+
+Reachable from the Assets page and from any rule that matches on a MAC. The old device does **not**
+have to be in the inventory — it is usually already unplugged — so the old address can also be
+picked from the addresses currently used in rules.
+
+Before staging anything it checks whether the rewritten rule can actually apply to the replacement:
+
+- the replacement sits on a port that is not in dynamic access mode
+- the replacement sits on a port running a *different* dynamic port policy than the rule lives in
+- the new MAC is already matched by another rule, which would leave two rules competing
+- the new MAC has not been seen by the FortiGate yet
+
 ### Port Policies
 
 The policy list with, per policy, how many rules it holds and how many ports it is assigned to.

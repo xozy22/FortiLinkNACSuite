@@ -8,8 +8,11 @@
 import { useMemo, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef } from 'react';
-import { Download, Layers, ListPlus, RefreshCw, Rows3 } from 'lucide-react';
+import { Download, Layers, ListPlus, RefreshCw, Repeat2, Rows3 } from 'lucide-react';
 import { useInventory, useRefData } from '@/api/hooks';
+import { useChangeset } from '@/state/changeset';
+import { projectDpps } from '@/lib/project';
+import { ReplaceDeviceDialog } from '@/components/ReplaceDeviceDialog';
 import type { Asset } from '@/api/types';
 import { CoverageBadge, Empty, ErrorBox, Loading, Note, OnlineDot, Val } from '@/components/common';
 import { applyFilter, emptyFilter, FilterBar, type FacetDef, type FilterState } from '@/components/FilterBar';
@@ -39,10 +42,13 @@ const searchText = (a: Asset) =>
 export function AssetsPage() {
   const { data, isLoading, error, refetch, isFetching } = useInventory();
   const { data: ref } = useRefData();
+  const cs = useChangeset();
   const [filter, setFilter] = useState<FilterState>(emptyFilter);
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [wizard, setWizard] = useState(false);
+  /** Offener Tausch-Dialog, vorbelegt mit der angeklickten Seite des Tauschs. */
+  const [replacing, setReplacing] = useState<{ oldMac: string; newMac: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const assets = data?.assets ?? [];
@@ -116,6 +122,13 @@ export function AssetsPage() {
             </button>
             <button className="btn" onClick={() => refetch()}>
               <RefreshCw size={13} className={isFetching ? 'spin' : ''} /> Refresh
+            </button>
+            <button
+              className="btn"
+              onClick={() => setReplacing({ oldMac: '', newMac: selectedAssets.length === 1 ? selectedAssets[0].mac : '' })}
+              title="A device was swapped out — move its rules to the replacement's MAC address"
+            >
+              <Repeat2 size={13} /> Replace device
             </button>
             <button className="btn primary" disabled={!selected.size} onClick={() => setWizard(true)}>
               <ListPlus size={13} /> Create rules ({selected.size})
@@ -286,6 +299,16 @@ export function AssetsPage() {
           )}
         </div>
       </div>
+
+      {replacing && (
+        <ReplaceDeviceDialog
+          dpps={projectDpps(ref?.['switch-controller/dynamic-port-policy']?.results ?? [], cs.ops)}
+          assets={assets}
+          initialOldMac={replacing.oldMac}
+          initialNewMac={replacing.newMac}
+          onClose={() => setReplacing(null)}
+        />
+      )}
 
       {wizard && (
         <BulkRuleWizard

@@ -17,6 +17,7 @@ import {
   ListTree,
   Pencil,
   Plus,
+  Repeat2,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ import { useToast } from '@/state/toast';
 import type { DppRule } from '@/api/types';
 import { Empty, ErrorBox, Loading, Modal, Note } from '@/components/common';
 import { RuleEditor } from '@/components/RuleEditor';
+import { ReplaceDeviceDialog } from '@/components/ReplaceDeviceDialog';
 import { ComboField, TextField } from '@/components/fields';
 import { fortiLinkOptions, type FortiLinkOption } from '@/lib/fortilink';
 import { projectDpps, type Pending } from '@/lib/project';
@@ -46,6 +48,8 @@ export function PoliciesPage() {
   const [editing, setEditing] = useState<{ rule: DppRule | null } | null>(null);
   const [newDpp, setNewDpp] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'dpp' | 'rule'; name: string } | null>(null);
+  /** MAC des zu ersetzenden Geraets, wenn der Tausch-Dialog offen ist. */
+  const [replacing, setReplacing] = useState<string | null>(null);
 
   const dpps = useMemo(
     () => projectDpps(ref?.['switch-controller/dynamic-port-policy']?.results ?? [], cs.ops),
@@ -282,6 +286,15 @@ export function PoliciesPage() {
                               <button className="btn ghost icon sm" title="Move down" disabled={i === rules.length - 1} onClick={() => move(i, 1)}>
                                 <ArrowDown size={12} />
                               </button>
+                              {r.mac && (
+                                <button
+                                  className="btn ghost icon sm"
+                                  title="Replace the device behind this MAC address"
+                                  onClick={() => setReplacing(String(r.mac))}
+                                >
+                                  <Repeat2 size={12} />
+                                </button>
+                              )}
                               <button className="btn ghost icon sm" title="Duplicate" onClick={() => duplicate(r)}>
                                 <Copy size={12} />
                               </button>
@@ -325,6 +338,10 @@ export function PoliciesPage() {
           onSave={saveRule}
           onClose={() => setEditing(null)}
         />
+      )}
+
+      {replacing && (
+        <ReplaceDeviceDialog dpps={dpps} assets={assets} initialOldMac={replacing} onClose={() => setReplacing(null)} />
       )}
 
       {newDpp && (
