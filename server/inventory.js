@@ -24,20 +24,74 @@ export const COVERAGE = {
 const norm = (v) => String(v ?? '').trim();
 const macKey = (v) => norm(v).toLowerCase();
 
+/** Seitengroesse und Obergrenze fuer das Geraeteinventar. */
+const PAGE_SIZE = 1000;
+const MAX_DEVICES = 50_000;
+
+/**
+ * Liest user/device/query seitenweise.
+ *
+ * Ein fester Deckel wuerde auf grossen Anlagen still abschneiden – und still
+ * ist hier das eigentliche Problem: Ein fehlendes Geraet sieht genauso aus wie
+ * eines, das es nicht gibt. Wird die Obergrenze doch erreicht, sagt das
+ * Inventar das ausdruecklich.
+ */
+async function fetchAllDevices(call, warnings) {
+  const devices = [];
+  let start = 0;
+  let truncated = false;
+
+  for (;;) {
+    const res = await call('monitor/user/device/query', { query: { start, count: PAGE_SIZE } });
+    if (!res?.ok) {
+      // Die erste Seite scheitert -> gar keine Geraete. Spaetere Seite -> Teilmenge.
+      warnings.push({
+        source: 'user/device/query',
+        status: res?.status ?? 0,
+        message:
+          start === 0
+            ? res?.data?.cli_error || res?.data?.error || `Could not read the device inventory (HTTP ${res?.status ?? '?'})`
+            : `Device inventory is incomplete: page at offset ${start} failed (HTTP ${res?.status ?? '?'})`,
+      });
+      break;
+    }
+
+    const page = Array.isArray(res.data?.results) ? res.data.results : Object.values(res.data?.results ?? {});
+    devices.push(...page);
+
+    // Kuerzer als angefordert heisst: das war die letzte Seite.
+    if (page.length < PAGE_SIZE) break;
+
+    start += PAGE_SIZE;
+    if (devices.length >= MAX_DEVICES) {
+      truncated = true;
+      warnings.push({
+        source: 'user/device/query',
+        status: 200,
+        message: `Stopped after ${devices.length} devices. The inventory is incomplete — raise the limit if your deployment is really this large.`,
+      });
+      break;
+    }
+  }
+
+  return { devices, truncated, pages: Math.ceil(devices.length / PAGE_SIZE) };
+}
+
 /**
  * Baut das Inventar.
  * @param {(apiPath:string, opts?:object) => Promise<{ok:boolean,status:number,data:any}>} call
  */
 export async function buildInventory(call) {
-  const [devicesRes, detectedRes, matchedRes, switchesRes] = await Promise.all([
-    call('monitor/user/device/query', { query: { start: 0, count: 2000 } }),
+  const warnings = [];
+
+  const [devicesResult, detectedRes, matchedRes, switchesRes] = await Promise.all([
+    fetchAllDevices(call, warnings),
     call('monitor/switch-controller/detected-device'),
     call('monitor/switch-controller/matched-devices', { query: { include_dynamic: true } }),
     call('cmdb/switch-controller/managed-switch'),
   ]);
 
-  const warnings = [];
-  const devices = pick(devicesRes, 'user/device/query', warnings);
+  const devices = devicesResult.devices;
   const detected = pick(detectedRes, 'switch-controller/detected-device', warnings);
   const matched = pick(matchedRes, 'switch-controller/matched-devices', warnings);
   const switches = pick(switchesRes, 'switch-controller/managed-switch', warnings);
@@ -132,6 +186,7 @@ export async function buildInventory(call) {
     fields: describeFields(devices),
     warnings,
     counts: summarize(assets),
+    truncated: devicesResult.truncated,
     fetchedAt: new Date().toISOString(),
   };
 }

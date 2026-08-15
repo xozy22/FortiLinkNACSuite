@@ -12,10 +12,13 @@
     "build": "npm run build -w web",
     "start": "npm run start -w server",
     "typecheck": "npm run typecheck -w web",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "npm run preview -w web"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=20"

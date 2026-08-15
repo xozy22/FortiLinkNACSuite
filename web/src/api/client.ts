@@ -52,6 +52,11 @@ const post = <T,>(path: string, body?: unknown) =>
   req<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const api = {
+  // App-Zugang
+  authState: () => req<{ required: boolean; authed: boolean }>('/api/auth'),
+  login: (password: string) => post<{ authed: boolean; required: boolean }>('/api/login', { password }),
+  logout: () => post<{ authed: false }>('/api/logout'),
+
   // Session & Verbindungen
   session: () => req<Session>('/api/session'),
   connect: (body: { host: string; apiKey?: string; vdom?: string; verifyTls?: boolean; readOnly?: boolean }) =>

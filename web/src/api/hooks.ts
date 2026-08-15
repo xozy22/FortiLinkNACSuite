@@ -5,6 +5,7 @@ import { api } from './client';
 import type { Op } from './types';
 
 export const keys = {
+  auth: ['auth'] as const,
   session: ['session'] as const,
   connections: ['connections'] as const,
   schema: ['schema'] as const,
@@ -12,8 +13,12 @@ export const keys = {
   refdata: ['refdata'] as const,
 };
 
-export function useSession() {
-  return useQuery({ queryKey: keys.session, queryFn: api.session, staleTime: 30_000 });
+export function useAuth() {
+  return useQuery({ queryKey: keys.auth, queryFn: api.authState, staleTime: 60_000, retry: false });
+}
+
+export function useSession(enabled = true) {
+  return useQuery({ queryKey: keys.session, queryFn: api.session, staleTime: 30_000, enabled });
 }
 
 export function useConnections() {

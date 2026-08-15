@@ -28,4 +28,9 @@ VOLUME ["/app/server/data"]
 
 EXPOSE 4100
 ENV FLNS_PORT=4100
+# Im Container muss auf allen Adressen gelauscht werden, sonst greift die
+# Portweiterleitung nicht. Der Server verweigert dann aber den Start ohne
+# FLNS_APP_PASSWORD – bewusst, denn sonst haengt Schreibzugriff auf die
+# FortiGate ungeschuetzt im Netz.
+ENV FLNS_BIND=0.0.0.0
 CMD ["node", "server/index.js"]

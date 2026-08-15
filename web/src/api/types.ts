@@ -57,6 +57,8 @@ export interface Inventory {
   fields: { key: string; kind: string; count: number; sample: unknown }[];
   warnings: { source: string; status: number; message: string }[];
   counts: InventoryCounts;
+  /** true, wenn das Inventar an der Obergrenze abgeschnitten wurde. */
+  truncated?: boolean;
   fetchedAt: string;
 }
 

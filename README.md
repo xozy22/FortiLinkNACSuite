@@ -225,8 +225,12 @@ Add a connection: host, API token, VDOM. Leave **read-only** on for the first lo
 ### Docker
 
 ```bash
-docker run -d --name fortilink-nac-suite -p 4100:4100 -v fortilink-nac-data:/app/server/data -e FLNS_SECRET=change-me ghcr.io/xozy22/fortilinknacsuite:main
+docker run -d --name fortilink-nac-suite -p 4100:4100 -v fortilink-nac-data:/app/server/data -e FLNS_APP_PASSWORD=change-me -e FLNS_SECRET=change-me-too ghcr.io/xozy22/fortilinknacsuite:main
 ```
+
+`FLNS_APP_PASSWORD` is not optional here. The container listens on all addresses so port
+forwarding works, and the server refuses to start on a reachable address without a password —
+see [Safety model](#safety-model).
 
 ### Docker Compose
 
@@ -240,7 +244,8 @@ services:
     volumes:
       - fortilink-nac-data:/app/server/data
     environment:
-      FLNS_SECRET: change-me           # encrypts stored API tokens at rest
+      FLNS_APP_PASSWORD: change-me     # required: the container listens on 0.0.0.0
+      FLNS_SECRET: change-me-too       # encrypts stored API tokens, signs session cookies
       # Optional: start with a connection already established
       # FGT_HOST: fortigate.example.local
       # FGT_API_KEY: xxxxxxxxxxxxxxxx
@@ -262,8 +267,12 @@ All configuration is environment variables on the **server**. Copy `server/.env.
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `FLNS_APP_PASSWORD` | — | Password for the UI itself. Without it the app is open to anyone who reaches the port. Required when listening on a non-loopback address. |
+| `FLNS_BIND` | `127.0.0.1` | Address to listen on. The default keeps the app on this machine. The container image sets `0.0.0.0`. |
+| `FLNS_ALLOW_ANONYMOUS` | `false` | Allow a non-loopback bind without a password — only when you have your own authentication in front. |
+| `FLNS_COOKIE_SECURE` | `false` | Send the session cookie over HTTPS only. Set it behind a TLS proxy; over plain HTTP it would swallow the cookie. |
 | `FLNS_PORT` | `4100` | Backend port. Deliberately **not** `PORT` — in development that belongs to the Vite dev server, and both would fight over it. |
-| `FLNS_SECRET` | — | Encrypts stored API tokens at rest with AES-256-GCM. Without it, tokens sit in `server/data/connections.json` in plain text and the server logs a warning at startup. |
+| `FLNS_SECRET` | — | Encrypts stored API tokens at rest with AES-256-GCM and signs session cookies. Without it, tokens sit in `server/data/connections.json` in plain text and the cookie signing key is generated into `server/data/.session-key`. |
 | `FLNS_DATA_DIR` | `server/data` | Where connection profiles are stored. |
 | `FLNS_SCHEMA_FILE` | `./api-doku.json` | Offline CMDB schema fallback, used when the live schema cannot be fetched. |
 | `FGT_HOST` | — | Optional: pre-configured connection, active without logging in. |
@@ -277,6 +286,11 @@ All configuration is environment variables on the **server**. Copy `server/.env.
 The API token is held **server-side only**. It is never sent to the browser: the connection list
 API strips it, and every FortiGate call is made by the backend. The browser holds an `HttpOnly`
 session cookie and nothing else.
+
+The cookie is signed with HMAC-SHA256 and names only *which* connection profile is in use — the
+token is looked up per request. That means sessions survive a server restart (a container update
+does not log everyone out) without any session state on disk. Ad-hoc connections, where host and
+token are typed in rather than saved as a profile, are held in memory and do not survive a restart.
 
 ---
 
@@ -397,6 +411,20 @@ devices for which MAC matching is the only reliable option.
 ---
 
 ## Safety model
+
+### Who can reach the app
+
+Anyone who can reach the API can connect with a stored profile and write to your FortiGate. The
+token stays on the server, but its *effect* does not. Two defaults follow from that:
+
+- The server binds to **`127.0.0.1`** unless told otherwise.
+- It **refuses to start** on any other address without `FLNS_APP_PASSWORD`, naming the three ways
+  out (set a password, bind to loopback, or declare that you have your own authentication in front
+  via `FLNS_ALLOW_ANONYMOUS`).
+
+With a password set, every `/api` route including connection-profile management sits behind it.
+
+### Before anything is written
 
 Nothing in the UI writes to the FortiGate directly. Every edit produces an **operation** in a
 changeset, and the changeset is applied only when you confirm it.
@@ -550,10 +578,24 @@ action on the Port Assignment page to force it.
 ```bash
 npm install
 npm run dev          # backend on 4100, frontend on 5273, both with hot reload
+npm test             # vitest, server and web in one run
+npm run test:watch   # same, in watch mode
 npm run typecheck    # tsc --noEmit
 npm run build        # production build of the frontend
 npm start            # serve the built frontend from the backend
 ```
+
+### Tests
+
+The suite covers the parts where a mistake reaches the FortiGate or misleads the person reading
+the screen: the changeset engine (validation, dependency ordering, apply, conflict detection,
+revert), the CLI preview, the three-way inventory join including pagination and source failures,
+the rule simulator and the pending-change projection.
+
+The in-memory mock FortiGate doubles as the fixture, so `applyOps` is exercised against something
+that enforces the same referential rules the appliance does. Several cases are regression tests for
+bugs this project actually had — a rule appended behind the catch-all, and a conflict false alarm
+from an incomplete snapshot.
 
 ### Layout
 

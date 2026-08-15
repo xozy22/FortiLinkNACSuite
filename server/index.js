@@ -19,29 +19,112 @@ import { createDemoStore } from './demo.js';
 import { buildInventory } from './inventory.js';
 import { validateOps, applyOps, revertOps, orderOps } from './changeset.js';
 import { opsToCli } from './cli.js';
+import {
+  checkBindSafety,
+  checkPassword,
+  clearSession,
+  isAuthed,
+  issueSession,
+  passwordRequired,
+  readSession,
+} from './session.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Bewusst FLNS_PORT und nicht PORT: Im Dev-Betrieb belegt der Vite-Server das
 // generische PORT, und beide wuerden sonst um denselben Port konkurrieren.
 const PORT = Number(process.env.FLNS_PORT || 4100);
-const COOKIE = 'flns_sid';
+const BIND = process.env.FLNS_BIND || '127.0.0.1';
 
 const app = express();
 app.use(express.json({ limit: '8mb' }));
 app.use(cookieParser());
 
 // ---------------------------------------------------------------------------
-// Sessions (in-memory). Der API-Token verlaesst diesen Prozess nie.
+// Zugangsschranke. Alles unter /api ausser Health und Login setzt eine
+// angemeldete Sitzung voraus, sobald ein App-Passwort konfiguriert ist – auch
+// die Verwaltung der Verbindungsprofile, denn wer die erreicht, kann sich mit
+// einem gespeicherten Profil verbinden und auf der FortiGate schreiben.
 // ---------------------------------------------------------------------------
-/** @type {Map<string, any>} */
-const sessions = new Map();
+const OPEN_ROUTES = new Set(['/api/health', '/api/login', '/api/auth']);
 
+app.use('/api', (req, res, next) => {
+  if (OPEN_ROUTES.has(req.path) || OPEN_ROUTES.has(`/api${req.path}`)) return next();
+  if (isAuthed(req)) return next();
+  res.status(401).json({ error: 'Authentication required', hint: 'Sign in to the app first.', authRequired: true });
+});
+
+app.get('/api/auth', (req, res) => {
+  res.json({ required: passwordRequired(), authed: isAuthed(req) });
+});
+
+app.post('/api/login', (req, res) => {
+  if (!passwordRequired()) return res.json({ authed: true, required: false });
+  if (!checkPassword(req.body?.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  // Eine bestehende Verbindung bleibt erhalten, nur das Auth-Flag kommt dazu.
+  const prev = readSession(req) ?? {};
+  issueSession(res, { cid: prev.cid ?? null, adhoc: prev.adhoc ?? null, authed: true });
+  res.json({ authed: true, required: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  clearSession(res);
+  res.json({ authed: false });
+});
+
+// ---------------------------------------------------------------------------
+// Sessions.
+//
+// Das Cookie nennt nur das Verbindungsprofil; der Token wird pro Request aus dem
+// Profilspeicher geholt. Nur Ad-hoc-Verbindungen (Host und Token direkt
+// eingegeben, nicht gespeichert) und der Demo-Mock leben im Speicher – die sind
+// nach einem Neustart erwartungsgemaess weg.
+// ---------------------------------------------------------------------------
+/** @type {Map<string, any>} conn-Objekte fuer Ad-hoc-Verbindungen und Demo */
+const ephemeral = new Map();
+/** @type {Map<string, any>} zwischengespeicherte Geraeteinfos je Profil */
+const infoCache = new Map();
+/** Aus .env vorkonfigurierte Verbindung, gilt ohne Cookie. */
+let envConn = null;
+
+/** Baut aus dem Cookie das vollstaendige Verbindungsobjekt. */
 function getSession(req) {
-  const sid = req.cookies?.[COOKIE];
-  if (sid && sessions.has(sid)) return { sid, ...sessions.get(sid) };
+  const payload = readSession(req);
+
+  if (payload?.adhoc && ephemeral.has(payload.adhoc)) {
+    return { ...ephemeral.get(payload.adhoc), sid: payload.adhoc };
+  }
+
+  if (payload?.cid) {
+    const p = getConnection(payload.cid);
+    if (p) {
+      return {
+        host: p.host,
+        apiKey: p.apiKey,
+        vdom: p.vdom,
+        verifyTls: p.verifyTls,
+        readOnly: p.readOnly,
+        demo: p.host.toLowerCase() === 'demo',
+        demoStore: p.host.toLowerCase() === 'demo' ? demoStoreFor(p.id) : undefined,
+        info: infoCache.get(p.id) ?? null,
+        connectionId: p.id,
+        connectionName: p.name,
+        sid: p.id,
+      };
+    }
+  }
+
   // Vorkonfigurierte Verbindung aus .env gilt, solange der Client keine eigene hat.
-  if (sessions.has('env-default')) return { sid: 'env-default', ...sessions.get('env-default') };
+  if (envConn && !payload?.cid && !payload?.adhoc) return { ...envConn, sid: 'env-default' };
   return null;
+}
+
+/** Demo-Stores pro Profil, damit Aenderungen nicht zwischen Profilen ueberlaufen. */
+function demoStoreFor(key) {
+  const k = `demo:${key}`;
+  if (!ephemeral.has(k)) ephemeral.set(k, createDemoStore());
+  return ephemeral.get(k);
 }
 
 function requireSession(req, res) {
@@ -53,10 +136,20 @@ function requireSession(req, res) {
   return s;
 }
 
+/**
+ * Startet eine Session. Profile werden ueber ihre ID referenziert und
+ * ueberstehen damit einen Neustart; Ad-hoc-Verbindungen bekommen einen
+ * Speicherplatz, der das nicht tut.
+ */
 function startSession(res, conn) {
+  if (conn.connectionId) {
+    if (conn.info) infoCache.set(conn.connectionId, conn.info);
+    issueSession(res, { cid: conn.connectionId, authed: true });
+    return conn.connectionId;
+  }
   const sid = randomUUID();
-  sessions.set(sid, conn);
-  res.cookie(COOKIE, sid, { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 12 });
+  ephemeral.set(sid, conn);
+  issueSession(res, { adhoc: sid, authed: true });
   return sid;
 }
 
@@ -139,15 +232,29 @@ app.post('/api/connections/:id/connect', (req, res) => {
 });
 
 app.post('/api/disconnect', (req, res) => {
-  const sid = req.cookies?.[COOKIE];
-  if (sid) sessions.delete(sid);
-  res.clearCookie(COOKIE);
+  const payload = readSession(req);
+  if (payload?.adhoc) ephemeral.delete(payload.adhoc);
+  envConn = null; // eine ausdrueckliche Abmeldung soll die .env-Verbindung nicht sofort ersetzen
+  // Angemeldet bleiben, nur die FortiGate-Verbindung loesen.
+  issueSession(res, { authed: true });
   res.json({ connected: false });
 });
 
-app.get('/api/session', (req, res) => {
+app.get('/api/session', async (req, res) => {
   const s = getSession(req);
-  res.json(s ? sessionResponse(s) : { connected: false });
+  if (!s) return res.json({ connected: false, authRequired: passwordRequired() });
+
+  // Nach einem Neustart lebt die Session weiter, die Geraeteinfo aber nicht –
+  // einmal nachladen, damit Host und Version im Kopf wieder stimmen.
+  if (!s.info && s.connectionId) {
+    try {
+      s.info = s.demo ? s.demoStore.info : await testConnection(s);
+      infoCache.set(s.connectionId, s.info);
+    } catch {
+      /* Verbindung gerade nicht erreichbar – die Seite zeigt das beim ersten Abruf */
+    }
+  }
+  res.json(sessionResponse(s));
 });
 
 // --- Profile ---------------------------------------------------------------
@@ -475,10 +582,9 @@ if (existsSync(distDir)) {
 // Optionale Vorbelegung aus der Umgebung
 function bootstrapEnvSession() {
   if (!process.env.FGT_HOST) return;
-  const sid = 'env-default';
   const host = normalizeHost(process.env.FGT_HOST);
   const demo = host.toLowerCase() === 'demo';
-  sessions.set(sid, {
+  envConn = {
     host,
     apiKey: process.env.FGT_API_KEY ?? 'demo',
     vdom: process.env.FGT_VDOM || 'root',
@@ -489,12 +595,22 @@ function bootstrapEnvSession() {
     info: null,
     connectionId: null,
     connectionName: 'Preconfigured',
-  });
-  console.log(`[flns] Preconfigured connection to ${host} loaded (session id "env-default").`);
+  };
+  console.log(`[flns] Preconfigured connection to ${host} loaded.`);
 }
 bootstrapEnvSession();
 
-app.listen(PORT, () => {
-  console.log(`[flns] FortiLink NAC Suite backend listening on http://localhost:${PORT}`);
+// Ohne Passwort nicht auf einer von aussen erreichbaren Adresse lauschen.
+const safety = checkBindSafety(BIND);
+if (!safety.ok) {
+  console.error(`\n[flns] ${safety.message}`);
+  process.exit(1);
+}
+
+app.listen(PORT, BIND, () => {
+  const shown = BIND === '0.0.0.0' || BIND === '::' ? 'localhost' : BIND;
+  console.log(`[flns] FortiLink NAC Suite backend listening on http://${shown}:${PORT} (bound to ${BIND})`);
+  if (passwordRequired()) console.log('[flns] App password is set – the UI asks for it before anything else.');
+  else console.log('[flns] No app password set (FLNS_APP_PASSWORD) – access is open to whoever reaches this port.');
   if (!existsSync(distDir)) console.log('[flns] No frontend build found – run the Vite dev server for the UI.');
 });

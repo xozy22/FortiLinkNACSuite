@@ -1,8 +1,10 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Route, Routes } from 'react-router-dom';
-import { useSession } from './api/hooks';
+import { useAuth, useSession } from './api/hooks';
 import { Layout } from './components/Layout';
 import { Loading } from './components/common';
 import { ConnectPage } from './pages/ConnectPage';
+import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AssetsPage } from './pages/AssetsPage';
 import { PoliciesPage } from './pages/PoliciesPage';
@@ -11,14 +13,22 @@ import { PortsPage } from './pages/PortsPage';
 import { ConnectionsPage } from './pages/ConnectionsPage';
 
 export default function App() {
-  const { data: session, isLoading } = useSession();
+  const qc = useQueryClient();
+  const { data: auth, isLoading: authLoading } = useAuth();
+  const needsLogin = auth?.required === true && auth.authed === false;
+  // Erst nach bestandener Zugangsschranke die Verbindung abfragen.
+  const { data: session, isLoading } = useSession(!authLoading && !needsLogin);
 
-  if (isLoading) {
+  if (authLoading || (isLoading && !needsLogin)) {
     return (
       <div style={{ display: 'grid', placeItems: 'center', height: '100vh' }}>
         <Loading label="Starting…" />
       </div>
     );
+  }
+
+  if (needsLogin) {
+    return <LoginPage onAuthed={() => qc.invalidateQueries()} />;
   }
 
   if (!session?.connected) return <ConnectPage />;

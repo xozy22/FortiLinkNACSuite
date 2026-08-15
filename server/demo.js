@@ -579,8 +579,12 @@ export function createDemoStore() {
       });
     }
 
+    // start/count werden bewusst umgesetzt: Ein Mock, der Paginierung ignoriert,
+    // kann einen Paginierungsfehler nicht aufdecken.
     if (path === 'monitor/user/device/query') {
-      return ok({ results: clone(DEVICES) });
+      const start = Math.max(0, Number(query.start) || 0);
+      const count = Number(query.count) > 0 ? Number(query.count) : DEVICES.length;
+      return ok({ results: clone(DEVICES.slice(start, start + count)) });
     }
 
     if (path === 'monitor/switch-controller/detected-device') {
