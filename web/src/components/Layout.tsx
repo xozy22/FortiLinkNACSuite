@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Archive,
   Cable,
   ChevronDown,
   History,
@@ -119,6 +120,10 @@ export function Layout({ session, children }: { session: Session; children: Reac
         <NavLink to="/connections" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <Plug size={15} />
           <span>Connections</span>
+        </NavLink>
+        <NavLink to="/backup" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <Archive size={15} />
+          <span>Backup &amp; Restore</span>
         </NavLink>
         <NavLink to="/activity" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <History size={15} />

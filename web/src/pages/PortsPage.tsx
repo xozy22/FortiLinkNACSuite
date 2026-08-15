@@ -6,7 +6,7 @@
 // Diese Seite zeigt den Ist-Zustand pro Port und erlaubt die Zuweisung in Serie.
 // ---------------------------------------------------------------------------
 import { useMemo, useState } from 'react';
-import { Plug, RefreshCcw, Users, Zap } from 'lucide-react';
+import { LayoutGrid, Plug, RefreshCcw, Rows3, Users, Zap } from 'lucide-react';
 import { useBouncePort, useInventory, useRefData } from '@/api/hooks';
 import { useChangeset } from '@/state/changeset';
 import { useToast } from '@/state/toast';
@@ -15,6 +15,7 @@ import { Empty, ErrorBox, Loading, Modal, Note } from '@/components/common';
 import { applyFilter, emptyFilter, FilterBar, type FacetDef, type FilterState } from '@/components/FilterBar';
 import { SelectField } from '@/components/fields';
 import { HoverCard } from '@/components/HoverCard';
+import { Faceplate, FaceplateLegend, portTone, type ColorMode } from '@/components/Faceplate';
 import { projectDpps, projectSwitches, type Pending } from '@/lib/project';
 import { setPort } from '@/lib/ops';
 import { useSort, sortIndicator } from '@/lib/sort';
@@ -78,6 +79,8 @@ export function PortsPage() {
   const [filter, setFilter] = useState<FilterState>(emptyFilter);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [assignOpen, setAssignOpen] = useState(false);
+  const [view, setView] = useState<'table' | 'faceplate'>('table');
+  const [colorMode, setColorMode] = useState<ColorMode>('access-mode');
 
   const switches = useMemo(() => projectSwitches(ref?.['switch-controller/managed-switch']?.results ?? [], cs.ops), [ref, cs.ops]);
   const dpps = useMemo(() => projectDpps(ref?.['switch-controller/dynamic-port-policy']?.results ?? [], cs.ops), [ref, cs.ops]);
@@ -196,7 +199,8 @@ export function PortsPage() {
         </Note>
       )}
 
-      <div className="panel" style={{ display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 240px)' }}>
+      {/* Filter gilt fuer beide Ansichten, steht deshalb ausserhalb. */}
+      <div className="panel">
         <FilterBar
           rows={rows}
           facets={FACETS}
@@ -204,9 +208,90 @@ export function PortsPage() {
           onChange={setFilter}
           search={searchText}
           placeholder="Search switch, port, description, policy…"
-          right={<span className="xs dim">{filtered.length} of {rows.length} ports</span>}
+          right={
+            <div className="row">
+              <span className="xs dim">
+                {filtered.length} of {rows.length} ports
+              </span>
+              <div className="sep" />
+              <div className="btn-group">
+                <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>
+                  <Rows3 size={11} /> Table
+                </button>
+                <button className={view === 'faceplate' ? 'active' : ''} onClick={() => setView('faceplate')}>
+                  <LayoutGrid size={11} /> Faceplate
+                </button>
+              </div>
+            </div>
+          }
         />
+      </div>
 
+      {view === 'faceplate' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="row wrap">
+            <span className="xs dim">Colour by</span>
+            <div className="btn-group">
+              {(['access-mode', 'coverage', 'link'] as ColorMode[]).map((m) => (
+                <button key={m} className={colorMode === m ? 'active' : ''} onClick={() => setColorMode(m)}>
+                  {m === 'access-mode' ? 'Access mode' : m === 'coverage' ? 'Coverage' : 'Link'}
+                </button>
+              ))}
+            </div>
+            <div className="sep" />
+            <FaceplateLegend mode={colorMode} />
+          </div>
+
+          {[...new Set(filtered.map((r) => r.switchId))].map((swId) => {
+            const swPorts = filtered.filter((r) => r.switchId === swId);
+            return (
+              <Faceplate
+                key={swId}
+                switchId={swId}
+                description={swPorts[0]?.switchDesc}
+                ports={swPorts}
+                colorMode={colorMode}
+                selected={new Set(swPorts.filter((r) => selected.has(key(r))).map((r) => r.port['port-name']))}
+                onToggle={(portName, additive) => {
+                  const row = swPorts.find((r) => r.port['port-name'] === portName);
+                  if (!row) return;
+                  const k = key(row);
+                  setSelected((prev) => {
+                    const n = additive ? new Set(prev) : new Set(prev);
+                    if (n.has(k)) n.delete(k);
+                    else n.add(k);
+                    return n;
+                  });
+                }}
+                renderTooltip={(p) =>
+                  [
+                    p.port['port-name'],
+                    p.port.description,
+                    portTone(p, colorMode).label,
+                    p.port['port-policy'] ? `policy ${p.port['port-policy']}` : null,
+                    p.devices.length
+                      ? p.devices.map((d) => `${d.hostname || d.macDisplay}${d.matchedRule ? ` → ${d.matchedRule}` : ' → no rule'}`).join('\n')
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join('\n')
+                }
+              />
+            );
+          })}
+
+          {filtered.length === 0 && (
+            <div className="panel">
+              <Empty title="No ports match" hint="Adjust the search or clear the filters." />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div
+        className="panel"
+        style={{ display: view === 'table' ? 'flex' : 'none', flexDirection: 'column', maxHeight: 'calc(100vh - 240px)' }}
+      >
         <div className="tbl-wrap">
           <table className="tbl">
             <colgroup>
@@ -346,18 +431,24 @@ export function PortsPage() {
           </table>
         </div>
 
-        {selected.size > 0 && (
-          <div className="toolbar" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none' }}>
+      </div>
+
+      {/* Auswahl gilt in beiden Ansichten – die Leiste gehoert deshalb nach aussen. */}
+      {selected.size > 0 && (
+        <div className="panel">
+          <div className="toolbar" style={{ borderBottom: 'none' }}>
             <Plug size={13} className="dim" />
             <span className="sm">{pluralize(selected.size, 'port')} selected</span>
-            <button className="btn ghost sm" onClick={() => setSelected(new Set())}>Clear</button>
+            <button className="btn ghost sm" onClick={() => setSelected(new Set())}>
+              Clear
+            </button>
             <div className="spacer" />
             <button className="btn primary sm" onClick={() => setAssignOpen(true)}>
               <Zap size={12} /> Assign policy
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {assignOpen && (
         <AssignModal

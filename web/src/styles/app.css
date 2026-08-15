@@ -1106,6 +1106,166 @@
 }
 
 /* --------------------------------------------------------------------------
+   Faceplate – der Switch als Portbild
+   -------------------------------------------------------------------------- */
+.faceplate {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.fp-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  background: var(--bg-panel-2);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--fs-sm);
+}
+
+.fp-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 14px;
+  overflow-x: auto;
+  /* Das Geraetechassis andeuten – hilft, die zwei Reihen als Einheit zu lesen. */
+  background: var(--bg-sunken);
+}
+
+.fp-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fp-row {
+  display: flex;
+  gap: 4px;
+}
+
+.fp-port {
+  position: relative;
+  width: 32px;
+  height: 28px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.fp-port:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  z-index: 1;
+}
+
+.fp-port.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Marker liegen INNERHALB der Kachel – ausserhalb ueberlappen sie den Nachbarport
+   und die Portnummer wird unlesbar. */
+.fp-port.pending::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.fp-port .fp-num {
+  pointer-events: none;
+}
+
+/* Mehrere Geraete am Port: nur ein Punkt, die genaue Zahl steht im Tooltip.
+   Fuer eine zweistellige Zahl ist auf 32px kein Platz, der die Nummer nicht
+   verdeckt. */
+.fp-port .fp-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.75;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  text-indent: -999px;
+}
+
+/* Farbtoene, gemeinsam von Ports und Legende genutzt */
+.tone-green {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green);
+}
+.tone-amber {
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.tone-red {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red);
+}
+.tone-blue {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.tone-violet {
+  background: var(--violet-soft);
+  border-color: var(--violet);
+  color: var(--violet);
+}
+.tone-idle {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-faint);
+}
+
+.fp-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid;
+  display: inline-block;
+}
+
+.fp-uplinks {
+  border-left: 1px dashed var(--border-strong);
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+}
+
+.fp-uplink-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-faint);
+}
+
+/* --------------------------------------------------------------------------
    Hover-Karte
    -------------------------------------------------------------------------- */
 .hovercard-trigger {

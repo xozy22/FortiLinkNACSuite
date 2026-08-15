@@ -285,6 +285,38 @@ export interface AuditEntry {
   cli?: string;
 }
 
+// --- Sicherung -------------------------------------------------------------
+
+export interface ConfigSummary {
+  policies: number;
+  rules: number;
+  vlanPolicies: number;
+  ports: number;
+}
+
+export interface ConfigBundle {
+  _format: string;
+  _version: number;
+  capturedAt?: string;
+  host?: string | null;
+  vdom?: string | null;
+  fortiOS?: string | null;
+  dynamicPortPolicies: Dpp[];
+  vlanPolicies: VlanPolicy[];
+  interfaceTags: string[];
+  portAssignments: { switchId: string; port: string; 'access-mode': string; 'port-policy': string }[];
+}
+
+export interface SnapshotMeta {
+  id: string;
+  at: string | null;
+  reason: string;
+  note: string | null;
+  host: string;
+  vdom: string;
+  summary: ConfigSummary;
+}
+
 // --- Schema ----------------------------------------------------------------
 
 export interface SchemaField {

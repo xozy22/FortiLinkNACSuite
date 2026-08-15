@@ -8,11 +8,12 @@
 import { useMemo, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef } from 'react';
-import { Download, Layers, ListPlus, RefreshCw, Repeat2, Rows3 } from 'lucide-react';
+import { Download, FileUp, Layers, ListPlus, RefreshCw, Repeat2, Rows3 } from 'lucide-react';
 import { useInventory, useRefData } from '@/api/hooks';
 import { useChangeset } from '@/state/changeset';
 import { projectDpps } from '@/lib/project';
 import { ReplaceDeviceDialog } from '@/components/ReplaceDeviceDialog';
+import { CsvImportWizard } from '@/components/CsvImportWizard';
 import type { Asset } from '@/api/types';
 import { CoverageBadge, Empty, ErrorBox, Loading, Note, OnlineDot, Val } from '@/components/common';
 import { applyFilter, emptyFilter, FilterBar, type FacetDef, type FilterState } from '@/components/FilterBar';
@@ -52,6 +53,7 @@ export function AssetsPage() {
   const [wizard, setWizard] = useState(false);
   /** Offener Tausch-Dialog, vorbelegt mit der angeklickten Seite des Tauschs. */
   const [replacing, setReplacing] = useState<{ oldMac: string; newMac: string } | null>(null);
+  const [csvOpen, setCsvOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const assets = data?.assets ?? [];
@@ -141,6 +143,13 @@ export function AssetsPage() {
             </button>
             <button className="btn" onClick={() => refetch()}>
               <RefreshCw size={13} className={isFetching ? 'spin' : ''} /> Refresh
+            </button>
+            <button
+              className="btn"
+              onClick={() => setCsvOpen(true)}
+              title="Create rules from a device list — for hardware the FortiGate has not seen yet"
+            >
+              <FileUp size={13} /> Import list
             </button>
             <button
               className="btn"
@@ -333,6 +342,14 @@ export function AssetsPage() {
           )}
         </div>
       </div>
+
+      {csvOpen && (
+        <CsvImportWizard
+          dpps={projectDpps(ref?.['switch-controller/dynamic-port-policy']?.results ?? [], cs.ops)}
+          assets={assets}
+          onClose={() => setCsvOpen(false)}
+        />
+      )}
 
       {replacing && (
         <ReplaceDeviceDialog

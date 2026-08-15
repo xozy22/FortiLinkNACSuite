@@ -20,6 +20,8 @@ import { buildInventory } from './inventory.js';
 import { validateOps, applyOps, revertOps, orderOps } from './changeset.js';
 import { opsToCli } from './cli.js';
 import { audit, connContext, readAudit, summarizeOp, AUDIT_FILE } from './audit.js';
+import { diffConfig, readConfig, summarizeConfig, validateConfig } from './config.js';
+import { deleteSnapshot, listSnapshots, readSnapshot, saveSnapshot } from './snapshot.js';
 import {
   checkBindSafety,
   checkPassword,
@@ -569,8 +571,25 @@ app.post('/api/changeset/apply', async (req, res) => {
     if (errors.length && req.body?.force !== true) {
       return res.status(400).json({ error: 'Validation failed.', errors });
     }
+    // Vorher-Stand sichern. Das kostet einen Lesedurchlauf und macht aus dem
+    // sitzungsgebundenen Revert ein Rollback, das auch morgen noch geht.
+    let snapshot = null;
+    try {
+      snapshot = saveSnapshot(await readConfig(call, { host: s.host, vdom: s.vdom }), {
+        host: s.host,
+        vdom: s.vdom,
+        reason: 'before-apply',
+        capturedAt: new Date().toISOString(),
+        note: `${ops.length} operation${ops.length === 1 ? '' : 's'}`,
+      });
+    } catch (e) {
+      console.warn('[flns] Snapshot before apply failed:', e.message);
+    }
+
     const outcome = await applyOps(call, ops, { stopOnError: req.body?.stopOnError !== false });
+    outcome.snapshot = snapshot ? snapshot.split(/[\\/]/).pop().replace(/\.json$/, '') : null;
     audit('changeset.apply', {
+      snapshot: outcome.snapshot,
       ...connContext(s, req),
       counts: {
         applied: outcome.appliedCount,
@@ -629,6 +648,108 @@ app.post('/api/ports/bounce', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: describeHttp(r) });
     audit('port.bounce', { ...connContext(s, req), switchId, port });
     res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Export, Import, Snapshots
+// ---------------------------------------------------------------------------
+
+/** Aktuellen NAC-Stand als Datei. */
+app.get('/api/export', async (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  try {
+    const cfg = await readConfig(apiFor(s), {
+      host: s.host,
+      vdom: s.vdom,
+      fortiOS: s.info?.version ?? null,
+      exportedBy: 'fortilink-nac-suite',
+    });
+    audit('config.export', { ...connContext(s, req), summary: summarizeConfig(cfg) });
+    res.json(cfg);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Vergleicht ein Buendel gegen den Ist-Zustand und liefert den Changeset.
+ * Angewendet wird nichts – das laeuft ueber den gewoehnlichen Review-Schritt.
+ */
+app.post('/api/import/plan', async (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  const cfg = req.body?.config;
+  const errors = validateConfig(cfg);
+  if (errors.length) return res.status(400).json({ error: 'Not a usable configuration file.', errors });
+
+  try {
+    const current = await readConfig(apiFor(s), { host: s.host, vdom: s.vdom });
+    const ops = diffConfig(cfg, current, {
+      deleteExtra: req.body?.deleteExtra === true,
+      scope: Array.isArray(req.body?.scope) ? req.body.scope : undefined,
+    });
+    res.json({ ops, source: { host: cfg.host ?? null, vdom: cfg.vdom ?? null, capturedAt: cfg.capturedAt ?? null }, summary: summarizeConfig(cfg) });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+app.get('/api/snapshots', (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  res.json({ snapshots: listSnapshots(s.host, s.vdom) });
+});
+
+app.get('/api/snapshots/:id', (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  const snap = readSnapshot(req.params.id);
+  if (!snap) return res.status(404).json({ error: 'Snapshot not found' });
+  res.json(snap);
+});
+
+app.delete('/api/snapshots/:id', (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  if (!deleteSnapshot(req.params.id)) return res.status(404).json({ error: 'Snapshot not found' });
+  res.status(204).end();
+});
+
+/** Von Hand einen Stand sichern, unabhaengig von einem Apply. */
+app.post('/api/snapshots', async (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  try {
+    const cfg = await readConfig(apiFor(s), { host: s.host, vdom: s.vdom });
+    const file = saveSnapshot(cfg, {
+      host: s.host,
+      vdom: s.vdom,
+      reason: 'manual',
+      capturedAt: new Date().toISOString(),
+      note: String(req.body?.note ?? '').slice(0, 200) || null,
+    });
+    if (!file) return res.status(500).json({ error: 'Could not write the snapshot.' });
+    audit('snapshot.create', { ...connContext(s, req), summary: summarizeConfig(cfg) });
+    res.json({ ok: true, snapshots: listSnapshots(s.host, s.vdom) });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/** Was waere noetig, um auf diesen Stand zurueckzukommen? */
+app.post('/api/snapshots/:id/plan', async (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  const snap = readSnapshot(req.params.id);
+  if (!snap) return res.status(404).json({ error: 'Snapshot not found' });
+  try {
+    const current = await readConfig(apiFor(s), { host: s.host, vdom: s.vdom });
+    const ops = diffConfig(snap.config, current, { deleteExtra: req.body?.deleteExtra !== false });
+    res.json({ ops, snapshot: { id: req.params.id, at: snap.capturedAt, reason: snap.reason, note: snap.note } });
   } catch (err) {
     sendError(res, err);
   }

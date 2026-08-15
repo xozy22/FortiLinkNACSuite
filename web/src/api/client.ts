@@ -3,7 +3,10 @@
 import type {
   ApplyResult,
   AuditEntry,
+  ConfigBundle,
+  ConfigSummary,
   ConnectionProfile,
+  SnapshotMeta,
   Inventory,
   Op,
   RefData,
@@ -97,4 +100,20 @@ export const api = {
   // VDOM der laufenden Verbindung wechseln
   vdoms: () => req<{ vdoms: string[]; current: string }>('/api/vdoms'),
   switchVdom: (vdom: string) => post<Session>('/api/session/vdom', { vdom }),
+
+  // Sicherung
+  exportConfig: () => req<ConfigBundle>('/api/export'),
+  planImport: (config: ConfigBundle, deleteExtra = false) =>
+    post<{ ops: Op[]; source: { host: string | null; vdom: string | null; capturedAt: string | null }; summary: ConfigSummary }>(
+      '/api/import/plan',
+      { config, deleteExtra }
+    ),
+  snapshots: () => req<{ snapshots: SnapshotMeta[] }>('/api/snapshots'),
+  createSnapshot: (note = '') => post<{ ok: true; snapshots: SnapshotMeta[] }>('/api/snapshots', { note }),
+  deleteSnapshot: (id: string) => req<void>(`/api/snapshots/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  planSnapshotRestore: (id: string, deleteExtra = true) =>
+    post<{ ops: Op[]; snapshot: { id: string; at: string; reason: string; note: string | null } }>(
+      `/api/snapshots/${encodeURIComponent(id)}/plan`,
+      { deleteExtra }
+    ),
 };

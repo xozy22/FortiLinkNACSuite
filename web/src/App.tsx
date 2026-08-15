@@ -12,6 +12,7 @@ import { VlanPoliciesPage } from './pages/VlanPoliciesPage';
 import { PortsPage } from './pages/PortsPage';
 import { ConnectionsPage } from './pages/ConnectionsPage';
 import { ActivityPage } from './pages/ActivityPage';
+import { BackupPage } from './pages/BackupPage';
 import { ChangesetProvider } from './state/changeset';
 
 export default function App() {
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/ports" element={<PortsPage />} />
           <Route path="/connections" element={<ConnectionsPage />} />
           <Route path="/activity" element={<ActivityPage />} />
+          <Route path="/backup" element={<BackupPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Routes>
       </Layout>

@@ -379,10 +379,28 @@ allowed VLANs, untagged VLANs, discard mode. VLAN choices are filtered to the in
 selected FortiLink. The list shows which rules reference each policy, and deletion warns when a
 policy is still in use.
 
+### Importing a device list
+
+Rules can also come from a CSV — an inventory export, a patch plan, a spreadsheet. That covers the
+case the live inventory cannot: hardware that has not been plugged in yet, during a rollout or a
+planned migration.
+
+The MAC column is detected by **content rather than by header name**, so German, English or missing
+headers all work; comma, semicolon and tab are recognised, quoted fields and BOM included. Rows
+without a usable MAC, duplicates within the file and addresses already matched by an existing rule
+are listed as skipped rather than silently dropped.
+
 ### Port Assignment
 
 Every port of every managed switch with its link state, description, `access-mode`, assigned policy,
-tags, connected devices and the rule that matched there. Multi-select to switch ports to dynamic
+tags, connected devices and the rule that matched there. A **faceplate view** draws the switch as a
+port grid — two rows with uplinks set apart — coloured by access mode, coverage or link state, which
+answers "is NAC actually deployed here" far faster than a 36-row table. Clicking ports selects them
+for assignment just like the table does.
+
+The layout is derived from the port list. FortiOS also offers the exact physical layout via
+`monitor/switch-controller/managed-switch/faceplate-xml`, but its structure is undocumented and has
+not been verified against a real device, so nothing is guessed there yet. Multi-select to switch ports to dynamic
 access mode and attach a policy in one operation. Per port, a **bounce** action forces connected
 devices to be re-evaluated.
 
@@ -403,6 +421,22 @@ actual devices on that port with hostname, MAC, IP, classification, VLAN and the
 matched. That matters because more than one device per port is the normal case in a voice
 deployment: the desk phone and the PC behind it sit on the same port and are usually caught by two
 different rules.
+
+### Backup &amp; Restore
+
+A snapshot of the managed configuration is written before **every** apply, and can be taken by hand
+at any time. Rolling one back does not overwrite anything directly — it diffs the snapshot against
+the live configuration and stages the result as a normal changeset, so a rollback gets the same
+review, CLI preview and conflict detection as a hand-made change.
+
+The same bundle exports to a file and imports again, which is how configuration moves between
+FortiGates: export from the lab, import into production, review the differences. Ports the file
+mentions but the target does not have are skipped rather than invented, and objects that exist only
+on the target are left alone unless removal is asked for.
+
+A backup holds the dynamic port policies with their rules and order, the VLAN policies, interface
+tags and the per-port policy assignment. Deliberately not device state — PoE, link, learned MACs —
+which is not configuration and would only add noise to a diff.
 
 ### Activity
 
@@ -623,13 +657,15 @@ server/                Express backend — holds the API token and the TLS decis
   changeset.js         Validation, dependency ordering, apply, conflict detection, revert
   cli.js               Operation list → FortiOS CLI text
   audit.js             Append-only activity log
+  config.js            Config bundle: read, diff, turn into operations
+  snapshot.js          Snapshots on disk, taken before every apply
   demo.js              In-memory mock FortiGate
   schema-fallback.json Trimmed CMDB schema (7 tables) used when the live one is unreachable
 web/src/
   api/                 Typed client and React Query hooks
   lib/                 Simulator, schema validation, projection, operation builders, sorting
   components/          Change drawer, rule editor, bulk wizard, filter bar, fields, hover card
-  pages/               Dashboard, Assets, Policies, VLAN Policies, Ports, Connections, Activity
+  pages/               Dashboard, Assets, Policies, VLAN Policies, Ports, Connections, Activity, Backup
 scripts/trim-schema.mjs  Regenerates the schema fallback from a full FortiGate dump
 ```
 
