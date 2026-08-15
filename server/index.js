@@ -14,11 +14,12 @@ import { fileURLToPath } from 'node:url';
 
 import { callFgt, testConnection, normalizeHost, FortiGateError } from './fortigate.js';
 import { listConnections, getConnection, createConnection, updateConnection, deleteConnection, toPublic } from './store.js';
-import { getSchema } from './schema.js';
+import { clearSchemaCache, getSchema } from './schema.js';
 import { createDemoStore } from './demo.js';
 import { buildInventory } from './inventory.js';
 import { validateOps, applyOps, revertOps, orderOps } from './changeset.js';
 import { opsToCli } from './cli.js';
+import { audit, connContext, readAudit, summarizeOp, AUDIT_FILE } from './audit.js';
 import {
   checkBindSafety,
   checkPassword,
@@ -60,8 +61,11 @@ app.get('/api/auth', (req, res) => {
 app.post('/api/login', (req, res) => {
   if (!passwordRequired()) return res.json({ authed: true, required: false });
   if (!checkPassword(req.body?.password)) {
+    // Fehlversuche gehoeren ins Log – wiederholte Versuche sind das Signal.
+    audit('auth.failed', { from: req.ip || req.socket?.remoteAddress || null });
     return res.status(401).json({ error: 'Wrong password' });
   }
+  audit('auth.ok', { from: req.ip || req.socket?.remoteAddress || null });
   // Eine bestehende Verbindung bleibt erhalten, nur das Auth-Flag kommt dazu.
   const prev = readSession(req) ?? {};
   issueSession(res, { cid: prev.cid ?? null, adhoc: prev.adhoc ?? null, authed: true });
@@ -102,7 +106,8 @@ function getSession(req) {
       return {
         host: p.host,
         apiKey: p.apiKey,
-        vdom: p.vdom,
+        // Ein VDOM-Wechsel gilt fuer die Sitzung, das Profil bleibt unveraendert.
+        vdom: payload.vdom || p.vdom,
         verifyTls: p.verifyTls,
         readOnly: p.readOnly,
         demo: p.host.toLowerCase() === 'demo',
@@ -220,6 +225,7 @@ async function connectWith(res, { host, apiKey, vdom, verifyTls, readOnly, conne
   }
 
   startSession(res, conn);
+  audit('fortigate.connect', { ...connContext(conn, res.req), readOnly: conn.readOnly });
   return res.json(sessionResponse(conn));
 }
 
@@ -255,6 +261,56 @@ app.get('/api/session', async (req, res) => {
     }
   }
   res.json(sessionResponse(s));
+});
+
+/**
+ * VDOMs derselben FortiGate. Braucht globalen Lesezugriff; ist der nicht da,
+ * bleibt die Liste leer und das UI laesst den Namen eintippen.
+ */
+app.get('/api/vdoms', async (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  try {
+    const r = await apiFor(s)('cmdb/system/vdom', { query: { format: 'name' }, vdom: null });
+    const vdoms = r.ok ? (r.data?.results ?? []).map((v) => v.name).filter(Boolean) : [];
+    res.json({ vdoms, current: s.vdom });
+  } catch {
+    res.json({ vdoms: [], current: s.vdom });
+  }
+});
+
+/** VDOM der laufenden Verbindung wechseln, ohne ein zweites Profil anzulegen. */
+app.post('/api/session/vdom', async (req, res) => {
+  const s = requireSession(req, res);
+  if (!s) return;
+  const vdom = String(req.body?.vdom ?? '').trim();
+  if (!vdom) return res.status(400).json({ error: 'A VDOM is required.' });
+
+  const conn = { ...s, vdom, info: null };
+  if (!conn.demo) {
+    try {
+      conn.info = await testConnection(conn);
+    } catch (err) {
+      const e = err instanceof FortiGateError ? err : new FortiGateError(err.message);
+      return res.status(e.status === 401 ? 401 : 502).json(e.toJSON());
+    }
+  } else {
+    conn.info = s.demoStore.info;
+  }
+
+  // Der VDOM gehoert zur Sitzung, nicht zum gespeicherten Profil – ein Wechsel
+  // hier soll das Profil nicht umschreiben.
+  if (conn.connectionId) {
+    infoCache.set(conn.connectionId, conn.info);
+    issueSession(res, { cid: conn.connectionId, vdom, authed: true });
+  } else {
+    const sid = randomUUID();
+    ephemeral.set(sid, conn);
+    issueSession(res, { adhoc: sid, authed: true });
+  }
+  clearSchemaCache();
+  audit('fortigate.vdom', { ...connContext(conn, req), vdom });
+  res.json(sessionResponse(conn));
 });
 
 // --- Profile ---------------------------------------------------------------
@@ -514,8 +570,23 @@ app.post('/api/changeset/apply', async (req, res) => {
       return res.status(400).json({ error: 'Validation failed.', errors });
     }
     const outcome = await applyOps(call, ops, { stopOnError: req.body?.stopOnError !== false });
+    audit('changeset.apply', {
+      ...connContext(s, req),
+      counts: {
+        applied: outcome.appliedCount,
+        failed: outcome.failedCount,
+        conflict: outcome.conflictCount,
+        skipped: outcome.skippedCount,
+      },
+      operations: ops.map((op) => {
+        const r = outcome.results.find((x) => x.id === op.id);
+        return { ...summarizeOp(op), status: r?.status ?? 'unknown', message: r?.message ?? null };
+      }),
+      cli: opsToCli(orderOps(ops)),
+    });
     res.json(outcome);
   } catch (err) {
+    audit('changeset.apply.error', { ...connContext(s, req), error: err.message });
     sendError(res, err);
   }
 });
@@ -527,8 +598,15 @@ app.post('/api/changeset/revert', async (req, res) => {
   const ops = Array.isArray(req.body?.ops) ? req.body.ops : [];
   if (!ops.length) return res.status(400).json({ error: 'Nothing to revert.' });
   try {
-    res.json(await revertOps(apiFor(s), ops));
+    const outcome = await revertOps(apiFor(s), ops);
+    audit('changeset.revert', {
+      ...connContext(s, req),
+      counts: { applied: outcome.appliedCount, failed: outcome.failedCount },
+      operations: ops.map(summarizeOp),
+    });
+    res.json(outcome);
   } catch (err) {
+    audit('changeset.revert.error', { ...connContext(s, req), error: err.message });
     sendError(res, err);
   }
 });
@@ -549,10 +627,20 @@ app.post('/api/ports/bounce', async (req, res) => {
       body: { mkey: switchId, port, duration: Math.min(Math.max(Number(duration) || 1, 1), 5) },
     });
     if (!r.ok) return res.status(r.status).json({ error: describeHttp(r) });
+    audit('port.bounce', { ...connContext(s, req), switchId, port });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+app.get('/api/audit', (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 1000);
+  res.json({ entries: readAudit(limit), file: AUDIT_FILE });
 });
 
 // ---------------------------------------------------------------------------

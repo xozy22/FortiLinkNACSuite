@@ -20,7 +20,6 @@ COPY server/package.json ./server/
 RUN npm install --omit=dev --workspace server --include-workspace-root
 
 COPY server ./server
-COPY api-doku.json ./api-doku.json
 COPY --from=build /app/web/dist ./web/dist
 
 # Verbindungsprofile persistieren – als Volume mounten

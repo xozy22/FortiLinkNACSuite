@@ -162,6 +162,14 @@ export function ChangeDrawer({ onClose, readOnly }: { onClose: () => void; readO
         {cs.count > 0 && !result && (
           <>
             <div style={{ padding: '10px 12px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {cs.restored && (
+                <Note kind="info">
+                  Restored from your last session — these changes were never applied.
+                  <button className="btn ghost sm" style={{ marginLeft: 6 }} onClick={cs.dismissRestored}>
+                    Got it
+                  </button>
+                </Note>
+              )}
               {readOnly && (
                 <Note kind="warn">
                   This connection is <strong>read-only</strong>. Turn off read-only on the connection profile and reconnect to

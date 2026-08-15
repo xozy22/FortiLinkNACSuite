@@ -17,6 +17,7 @@ import { SelectField } from '@/components/fields';
 import { HoverCard } from '@/components/HoverCard';
 import { projectDpps, projectSwitches, type Pending } from '@/lib/project';
 import { setPort } from '@/lib/ops';
+import { useSort, sortIndicator } from '@/lib/sort';
 import { linkSpeed, members, pluralize, relTime } from '@/lib/format';
 
 interface Row {
@@ -118,6 +119,21 @@ export function PortsPage() {
   }, [switches, inventory, ref]);
 
   const filtered = useMemo(() => applyFilter(rows, filter, FACETS, searchText), [rows, filter]);
+
+  const accessors = useMemo(
+    () => ({
+      // Portnamen numerisch sortieren, sonst steht port10 vor port2.
+      port: (r: Row) => `${r.switchId} ${r.port['port-name']}`,
+      link: (r: Row) => (r.adminDown ? -1 : r.status?.link === 'up' ? (r.status.speed ?? 1) : 0),
+      description: (r: Row) => r.port.description ?? '',
+      mode: (r: Row) => r.port['access-mode'] ?? 'static',
+      policy: (r: Row) => r.port['port-policy'] ?? '',
+      tags: (r: Row) => members(r.port['interface-tags'], 'tag-name').join(' '),
+      devices: (r: Row) => r.devices.length,
+    }),
+    []
+  );
+  const { sorted, sort, toggle: toggleSort } = useSort(filtered, accessors);
 
   const key = (r: Row) => `${r.switchId}|${r.port['port-name']}`;
   const allSelected = filtered.length > 0 && filtered.every((r) => selected.has(key(r)));
@@ -221,13 +237,13 @@ export function PortsPage() {
                     aria-label="Select all visible ports"
                   />
                 </th>
-                <th>Port</th>
-                <th>Link</th>
-                <th>Description</th>
-                <th>Access mode</th>
-                <th>Port policy</th>
-                <th>Tags</th>
-                <th>Devices seen</th>
+                <SortTh label="Port" col="port" sort={sort} onSort={toggleSort} />
+                <SortTh label="Link" col="link" sort={sort} onSort={toggleSort} />
+                <SortTh label="Description" col="description" sort={sort} onSort={toggleSort} />
+                <SortTh label="Access mode" col="mode" sort={sort} onSort={toggleSort} />
+                <SortTh label="Port policy" col="policy" sort={sort} onSort={toggleSort} />
+                <SortTh label="Tags" col="tags" sort={sort} onSort={toggleSort} />
+                <SortTh label="Devices seen" col="devices" sort={sort} onSort={toggleSort} />
                 <th />
               </tr>
             </thead>
@@ -239,7 +255,7 @@ export function PortsPage() {
                   </td>
                 </tr>
               )}
-              {filtered.map((r) => {
+              {sorted.map((r) => {
                 const mode = r.port['access-mode'] ?? 'static';
                 const k = key(r);
                 return (
@@ -359,6 +375,34 @@ export function PortsPage() {
         />
       )}
     </div>
+  );
+}
+
+/** Sortierbarer Spaltenkopf. */
+function SortTh({
+  label,
+  col,
+  sort,
+  onSort,
+}: {
+  label: string;
+  col: string;
+  sort: ReturnType<typeof useSort>['sort'];
+  onSort: (k: string) => void;
+}) {
+  const active = sort.key === col;
+  return (
+    <th
+      className="sortable"
+      onClick={() => onSort(col)}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      title="Sort by this column"
+    >
+      <span style={{ color: active ? 'var(--text)' : undefined }}>
+        {label}
+        {sortIndicator(sort, col)}
+      </span>
+    </th>
   );
 }
 

@@ -196,7 +196,3 @@ function childBody(op, indent) {
   return [`${indent}edit ${q(key)}`, ...setLines(op, `${indent}${IND}`), `${indent}next`];
 }
 
-/** Einzelne Operation als CLI – fuer die Detailansicht je Op im Drawer. */
-export function opToCli(op) {
-  return opsToCli([op]);
-}

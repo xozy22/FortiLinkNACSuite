@@ -89,13 +89,17 @@ export function PoliciesPage() {
 
   function saveRule(rule: DppRule) {
     if (!selected) return;
+
+    // Entscheidend ist, ob es die Regel auf der FortiGate schon gibt – nicht, ob
+    // der Editor mit Vorlage geoeffnet wurde. Ein Duplikat kommt mit gefuellter
+    // Vorlage, ist aber ein Neuanlegen.
     const original = (ref?.['switch-controller/dynamic-port-policy']?.results ?? [])
       .find((d) => d.name === selected.name)
       ?.policy?.find((r) => r.name === rule.name);
 
-    if (editing?.rule && original) cs.add(modifyRule(selected.name, original, rule));
-    else if (editing?.rule) cs.add(modifyRule(selected.name, editing.rule, rule));
-    else {
+    if (original) {
+      cs.add(modifyRule(selected.name, original, rule));
+    } else {
       cs.add(createRule(selected.name, rule));
       // Neue Regeln landen bei FortiOS hinten – vor einem Catch-All einsortieren.
       if (catchAllIndex >= 0) cs.add(moveRule(selected.name, rule.name, 'before', rules[catchAllIndex].name));

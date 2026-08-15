@@ -260,6 +260,31 @@ export interface ApplyResult {
   revertable: Op[];
 }
 
+// --- Audit -----------------------------------------------------------------
+
+export interface AuditOp {
+  kind: OpKind;
+  table: string;
+  mkey: string;
+  child: string | null;
+  status: string;
+  message: string | null;
+}
+
+export interface AuditEntry {
+  at: string;
+  event: string;
+  host?: string | null;
+  vdom?: string | null;
+  profile?: string | null;
+  demo?: boolean;
+  from?: string | null;
+  error?: string;
+  counts?: { applied: number; failed: number; conflict?: number; skipped?: number };
+  operations?: AuditOp[];
+  cli?: string;
+}
+
 // --- Schema ----------------------------------------------------------------
 
 export interface SchemaField {

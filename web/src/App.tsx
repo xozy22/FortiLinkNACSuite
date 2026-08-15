@@ -11,6 +11,8 @@ import { PoliciesPage } from './pages/PoliciesPage';
 import { VlanPoliciesPage } from './pages/VlanPoliciesPage';
 import { PortsPage } from './pages/PortsPage';
 import { ConnectionsPage } from './pages/ConnectionsPage';
+import { ActivityPage } from './pages/ActivityPage';
+import { ChangesetProvider } from './state/changeset';
 
 export default function App() {
   const qc = useQueryClient();
@@ -33,18 +35,24 @@ export default function App() {
 
   if (!session?.connected) return <ConnectPage />;
 
+  // Der Changeset gehoert zu genau einer Verbindung und einem VDOM.
+  const scope = `${session.host}|${session.vdom}`;
+
   return (
-    <Layout session={session}>
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/assets" element={<AssetsPage />} />
-        <Route path="/policies" element={<PoliciesPage />} />
-        <Route path="/policies/:dpp" element={<PoliciesPage />} />
-        <Route path="/vlan-policies" element={<VlanPoliciesPage />} />
-        <Route path="/ports" element={<PortsPage />} />
-        <Route path="/connections" element={<ConnectionsPage />} />
-        <Route path="*" element={<DashboardPage />} />
-      </Routes>
-    </Layout>
+    <ChangesetProvider scope={scope}>
+      <Layout session={session}>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/assets" element={<AssetsPage />} />
+          <Route path="/policies" element={<PoliciesPage />} />
+          <Route path="/policies/:dpp" element={<PoliciesPage />} />
+          <Route path="/vlan-policies" element={<VlanPoliciesPage />} />
+          <Route path="/ports" element={<PortsPage />} />
+          <Route path="/connections" element={<ConnectionsPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="*" element={<DashboardPage />} />
+        </Routes>
+      </Layout>
+    </ChangesetProvider>
   );
 }

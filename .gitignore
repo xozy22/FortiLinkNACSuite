@@ -1,5 +1,10 @@
 node_modules/
 dist/
+
+# Roher CMDB-Schema-Dump der eigenen FortiGate. Im Repo liegt stattdessen
+# server/schema-fallback.json – erzeugt mit scripts/trim-schema.mjs.
+api-doku.json
+
 .env
 .env.local
 server/data/connections.json
@@ -8,3 +13,4 @@ server/data/connections.json
 .playwright-mcp/
 .vite/
 *.tsbuildinfo
+server/data/

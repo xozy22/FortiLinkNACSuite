@@ -2,6 +2,7 @@
 // Backend, damit die UI ueberall dieselbe Fehlerdarstellung nutzen kann.
 import type {
   ApplyResult,
+  AuditEntry,
   ConnectionProfile,
   Inventory,
   Op,
@@ -89,4 +90,11 @@ export const api = {
   // Aktionen
   bouncePort: (switchId: string, port: string, duration = 1) =>
     post<{ ok: true }>('/api/ports/bounce', { switchId, port, duration }),
+
+  // Protokoll
+  audit: (limit = 200) => req<{ entries: AuditEntry[]; file: string }>(`/api/audit?limit=${limit}`),
+
+  // VDOM der laufenden Verbindung wechseln
+  vdoms: () => req<{ vdoms: string[]; current: string }>('/api/vdoms'),
+  switchVdom: (vdom: string) => post<Session>('/api/session/vdom', { vdom }),
 };

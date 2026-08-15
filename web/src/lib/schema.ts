@@ -30,9 +30,6 @@ export function dppFields(schema: SchemaBundle | undefined): Record<string, Sche
   return table(schema, TABLE_KEYS.DPP)?.children ?? {};
 }
 
-export function portFields(schema: SchemaBundle | undefined): Record<string, SchemaField> {
-  return table(schema, TABLE_KEYS.SWITCH)?.children?.ports?.children ?? {};
-}
 
 export function optionsOf(f: SchemaField | undefined): string[] {
   return (f?.options ?? []).map((o) => o.name);
@@ -78,29 +75,7 @@ export function checkField(f: SchemaField | undefined, value: unknown, fieldName
   return null;
 }
 
-/** Name eines FortiOS-Objekts – die haeufigste Fehlerquelle beim Anlegen. */
-export function checkName(name: string, f: SchemaField | undefined, taken: string[]): FieldIssue | null {
-  const v = String(name ?? '').trim();
-  if (!v) return { level: 'error', message: 'A name is required' };
-  if (f?.size && v.length > f.size) return { level: 'error', message: `Maximum ${f.size} characters` };
-  if (/[^A-Za-z0-9._-]/.test(v)) {
-    return { level: 'warn', message: 'Spaces and special characters can be awkward in the CLI — letters, digits, dot, dash and underscore are safest.' };
-  }
-  if (taken.some((t) => t.toLowerCase() === v.toLowerCase())) {
-    return { level: 'error', message: 'An object with this name already exists' };
-  }
-  return null;
-}
 
-/** Standardwerte aus dem Schema – damit neue Objekte wie FortiOS-Defaults starten. */
-export function defaultsFrom(fields: Record<string, SchemaField>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, f] of Object.entries(fields)) {
-    if (f.category === 'table') out[k] = [];
-    else if (f.default !== undefined && f.default !== '') out[k] = f.default;
-  }
-  return out;
-}
 
 /** Kurzhilfe eines Feldes, gekuerzt auf Tooltip-Laenge. */
 export function helpOf(f: SchemaField | undefined): string {

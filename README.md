@@ -309,7 +309,10 @@ is visibly different from one that NAC simply has no rule for.
 
 - Full-text search and nine facet filters (coverage, vendor, type, family, OS, switch, port policy,
   matched rule, online state), each showing counts under the other active filters
-- Grouping by vendor, type, family, switch or coverage
+- Grouping by vendor, type, family, switch or coverage, and sortable columns
+- A column picker offering the fields *this* firmware actually returns — the backend derives them
+  from the response rather than hard-coding a list, so things like `purdue_level`,
+  `dhcp_lease_status` or `host_src` are one click away
 - CSV export of the current selection
 - Multi-select → **Create rules**
 
@@ -401,6 +404,13 @@ matched. That matters because more than one device per port is the normal case i
 deployment: the desk phone and the PC behind it sit on the same port and are usually caught by two
 different rules.
 
+### Activity
+
+Every write the tool performed, kept server-side in `server/data/audit.log` as one JSON object per
+line: which operations ran, what each one returned, the equivalent CLI, the profile and VDOM, and
+where the request came from. Failed sign-ins are recorded too. The apply report in the drawer is
+gone after a reload — this is not.
+
 ### Dashboard
 
 Devices detected, coverage percentage, ports under NAC, and matched device slots against the
@@ -445,6 +455,10 @@ changeset, and the changeset is applied only when you confirm it.
 The CLI preview is generated from the same operation list that is executed, so it is a faithful
 description of the change — but applying uses the REST API, not the CLI. It exists for review and
 for pasting into change records.
+
+A staged changeset is kept in the browser per connection and VDOM, so an accidental reload does not
+throw the work away. It is flagged as restored when it comes back, to make clear it was never
+applied.
 
 ---
 
@@ -602,19 +616,34 @@ from an incomplete snapshot.
 ```
 server/                Express backend — holds the API token and the TLS decision
   fortigate.js         REST client: bearer auth, VDOM, TLS toggle, error hints
+  session.js           Signed session cookie, app password, bind safety check
   store.js             Connection profiles, optional AES-256-GCM token encryption
   schema.js            CMDB schema, live with offline fallback
-  inventory.js         The three-way device join
+  inventory.js         The three-way device join, paged
   changeset.js         Validation, dependency ordering, apply, conflict detection, revert
   cli.js               Operation list → FortiOS CLI text
+  audit.js             Append-only activity log
   demo.js              In-memory mock FortiGate
+  schema-fallback.json Trimmed CMDB schema (7 tables) used when the live one is unreachable
 web/src/
   api/                 Typed client and React Query hooks
-  lib/                 Simulator, schema validation, projection, operation builders
-  components/          Change drawer, rule editor, bulk wizard, filter bar, fields
-  pages/               Dashboard, Assets, Policies, VLAN Policies, Ports, Connections
-api-doku.json          CMDB schema dump, used as offline schema fallback
+  lib/                 Simulator, schema validation, projection, operation builders, sorting
+  components/          Change drawer, rule editor, bulk wizard, filter bar, fields, hover card
+  pages/               Dashboard, Assets, Policies, VLAN Policies, Ports, Connections, Activity
+scripts/trim-schema.mjs  Regenerates the schema fallback from a full FortiGate dump
 ```
+
+### Regenerating the schema fallback
+
+A full `?action=schema` dump is about 4 MB across 685 tables; this tool needs seven of them. The
+committed fallback is the trimmed result, roughly 33 KB:
+
+```bash
+curl -k -H "Authorization: Bearer <token>" "https://<fortigate>/api/v2/cmdb/?action=schema" -o api-doku.json
+node scripts/trim-schema.mjs
+```
+
+The raw dump is gitignored — it carries the serial number of the device it came from.
 
 ### Design notes
 

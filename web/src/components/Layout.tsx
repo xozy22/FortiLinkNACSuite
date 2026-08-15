@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Cable,
+  ChevronDown,
+  History,
   LayoutDashboard,
   ListTree,
   LogOut,
@@ -14,7 +17,9 @@ import {
   Zap,
 } from 'lucide-react';
 import type { Session } from '@/api/types';
+import { api } from '@/api/client';
 import { useChangeset } from '@/state/changeset';
+import { useToast } from '@/state/toast';
 import { useRefData, useRefreshAll, useSessionMutations } from '@/api/hooks';
 import { ChangeDrawer } from './ChangeDrawer';
 
@@ -63,10 +68,10 @@ export function Layout({ session, children }: { session: Session; children: Reac
           <span className={`badge ${session.demo ? 'violet' : session.readOnly ? 'amber' : 'green'}`}>
             {session.demo ? 'Demo' : session.readOnly ? 'Read-only' : 'Read-write'}
           </span>
-          <span className="mono sm truncate" title={`${session.host} · VDOM ${session.vdom}`}>
+          <span className="mono sm truncate" title={session.host}>
             {session.host}
           </span>
-          <span className="xs dim">vdom {session.vdom}</span>
+          <VdomSwitcher session={session} />
           {session.info?.version && <span className="xs dim">· FortiOS {session.info.version}</span>}
         </div>
 
@@ -115,6 +120,10 @@ export function Layout({ session, children }: { session: Session; children: Reac
           <Plug size={15} />
           <span>Connections</span>
         </NavLink>
+        <NavLink to="/activity" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <History size={15} />
+          <span>Activity</span>
+        </NavLink>
 
         <div className="spacer" />
         <div className="xs dim" style={{ padding: '10px 9px', lineHeight: 1.5 }}>
@@ -127,6 +136,81 @@ export function Layout({ session, children }: { session: Session; children: Reac
       <main className="main">{children}</main>
 
       {open && <ChangeDrawer onClose={() => setDrawer(false)} readOnly={!!session.readOnly} />}
+    </div>
+  );
+}
+
+/**
+ * VDOM-Umschalter. Der VDOM haengt an der Sitzung, nicht am gespeicherten
+ * Profil – ein Wechsel schreibt das Profil also nicht um. Anstehende
+ * Aenderungen gehoeren zum alten VDOM und werden nicht mitgenommen.
+ */
+function VdomSwitcher({ session }: { session: Session }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const cs = useChangeset();
+  const [open, setOpen] = useState(false);
+  const [manual, setManual] = useState('');
+
+  const { data } = useQuery({ queryKey: ['vdoms'], queryFn: api.vdoms, enabled: open, staleTime: 5 * 60_000 });
+  const switching = useMutation({
+    mutationFn: api.switchVdom,
+    onSuccess: () => {
+      qc.invalidateQueries();
+      setOpen(false);
+    },
+  });
+
+  async function go(vdom: string) {
+    if (!vdom || vdom === session.vdom) return setOpen(false);
+    if (cs.count > 0 && !window.confirm(`${cs.count} pending change(s) belong to VDOM "${session.vdom}" and stay there. Switch anyway?`)) {
+      return;
+    }
+    try {
+      await switching.mutateAsync(vdom);
+      toast('ok', `Switched to VDOM ${vdom}`);
+    } catch (e) {
+      const err = e as { message?: string; hint?: string };
+      toast('err', 'Could not switch VDOM', err.hint ?? err.message);
+    }
+  }
+
+  const list = data?.vdoms ?? [];
+
+  return (
+    <div className="facet">
+      <button className="facet-btn" onClick={() => setOpen((o) => !o)} title="Switch VDOM">
+        vdom <b style={{ fontWeight: 600 }}>{session.vdom}</b>
+        <ChevronDown size={11} />
+      </button>
+      {open && (
+        <div className="facet-pop" style={{ minWidth: 210 }}>
+          {list.map((v) => (
+            <div key={v} className="facet-opt" onClick={() => go(v)}>
+              <span className="mono xs">{v}</span>
+              {v === session.vdom && <span className="badge green">current</span>}
+            </div>
+          ))}
+          {list.length === 0 && (
+            <div className="xs dim" style={{ padding: '4px 7px 7px' }}>
+              Could not list VDOMs — the token needs global read access. Type the name instead.
+            </div>
+          )}
+          <div style={{ borderTop: '1px solid var(--border-soft)', marginTop: 4, paddingTop: 6, display: 'flex', gap: 5 }}>
+            <input
+              className="input mono"
+              value={manual}
+              onChange={(e) => setManual(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && go(manual.trim())}
+              placeholder="vdom name"
+              style={{ flex: 1 }}
+            />
+            <button className="btn sm" disabled={!manual.trim() || switching.isPending} onClick={() => go(manual.trim())}>
+              Go
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

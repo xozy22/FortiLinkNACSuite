@@ -33,11 +33,6 @@ export function isMac(v: string): boolean {
   return /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(String(v ?? '').trim());
 }
 
-/** OUI-Anteil einer MAC – nuetzlich zum Gruppieren. */
-export function oui(mac: string): string {
-  const n = normMac(mac);
-  return n.length === 17 ? n.slice(0, 8) : '';
-}
 
 /** Aus einem Anzeigenamen einen FortiOS-tauglichen Objektnamen bauen. */
 export function slug(v: string, max = 63): string {

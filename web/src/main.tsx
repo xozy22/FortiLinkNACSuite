@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ToastProvider } from './state/toast';
-import { ChangesetProvider } from './state/changeset';
 import './styles/theme.css';
 import './styles/app.css';
 
@@ -22,11 +21,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        <ChangesetProvider>
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <App />
-          </BrowserRouter>
-        </ChangesetProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </BrowserRouter>
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>

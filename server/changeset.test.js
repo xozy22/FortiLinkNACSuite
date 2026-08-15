@@ -309,6 +309,32 @@ describe('applyOps', () => {
     expect(out.results[0].status).toBe('skipped');
   });
 
+  // Regression: Das Duplizieren einer Regel erzeugte ein modify auf einen Namen,
+  // den es noch gar nicht gab – der Apply scheiterte dann mit "no longer exists".
+  it('rejects a modify aimed at a rule that does not exist', async () => {
+    const out = await applyOps(call, [
+      {
+        id: 'm',
+        kind: 'modify',
+        table: DPP,
+        mkey: 'DPP-Access',
+        child: { table: 'policy', mkey: 'R30-Cameras-copy' },
+        before: { name: 'R30-Cameras-copy' },
+        after: { 'hw-vendor': 'Axis Comm' },
+        label: 'x',
+      },
+    ]);
+    expect(out.results[0].status).toBe('failed');
+    expect(out.results[0].message).toMatch(/no longer exists/i);
+  });
+
+  it('creates that duplicate properly when it is staged as a create', async () => {
+    const out = await applyOps(call, [rule('R30-Cameras-copy', { 'hw-vendor': 'Axis Comm', 'vlan-policy': 'VP-Camera' })]);
+    expect(out.results[0].status).toBe('applied');
+    const dpp = (await call(`cmdb/${DPP}`)).data.results.find((d) => d.name === 'DPP-Access');
+    expect(dpp.policy.some((r) => r.name === 'R30-Cameras-copy')).toBe(true);
+  });
+
   it('stops after a failure so later operations cannot build on it', async () => {
     const ops = [
       { id: 'bad', kind: 'create', table: VLANPOL, mkey: 'VP-Printer', after: { fortilink: 'fortilink' }, before: null, label: 'x' },

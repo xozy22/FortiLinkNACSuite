@@ -14,7 +14,13 @@ import { fileURLToPath } from 'node:url';
 import { callFgt } from './fortigate.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const LOCAL_SCHEMA = process.env.FLNS_SCHEMA_FILE || join(here, '..', 'api-doku.json');
+
+/**
+ * Der mitgelieferte Fallback enthaelt nur die sieben Tabellen, die die Suite
+ * anfasst (rund 33 KB statt 4 MB Rohdump). Neu erzeugen mit
+ * `node scripts/trim-schema.mjs <dump>`.
+ */
+const LOCAL_SCHEMA = process.env.FLNS_SCHEMA_FILE || join(here, 'schema-fallback.json');
 
 /** Tabellen, die die Suite kennt. Alles andere wird verworfen. */
 export const TABLES = {

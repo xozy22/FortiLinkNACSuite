@@ -16,6 +16,8 @@ import { ReplaceDeviceDialog } from '@/components/ReplaceDeviceDialog';
 import type { Asset } from '@/api/types';
 import { CoverageBadge, Empty, ErrorBox, Loading, Note, OnlineDot, Val } from '@/components/common';
 import { applyFilter, emptyFilter, FilterBar, type FacetDef, type FilterState } from '@/components/FilterBar';
+import { ColumnPicker, loadColumns, renderExtra } from '@/components/ColumnPicker';
+import { useSort, sortIndicator } from '@/lib/sort';
 import { downloadCsv, relTime } from '@/lib/format';
 import { BulkRuleWizard } from '@/components/BulkRuleWizard';
 import { simulateAll, compareWithFortiGate } from '@/lib/match';
@@ -45,6 +47,7 @@ export function AssetsPage() {
   const cs = useChangeset();
   const [filter, setFilter] = useState<FilterState>(emptyFilter);
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
+  const [extraColumns, setExtraColumns] = useState<string[]>(() => loadColumns());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [wizard, setWizard] = useState(false);
   /** Offener Tausch-Dialog, vorbelegt mit der angeklickten Seite des Tauschs. */
@@ -53,6 +56,22 @@ export function AssetsPage() {
 
   const assets = data?.assets ?? [];
   const filtered = useMemo(() => applyFilter(assets, filter, FACETS, searchText), [assets, filter]);
+
+  // Sortierung. Die Gruppierung hat Vorrang – innerhalb einer Gruppe wird sortiert.
+  const accessors = useMemo(
+    () => ({
+      device: (a: Asset) => a.hostname || a.macDisplay,
+      address: (a: Asset) => a.ipv4,
+      lastSeen: (a: Asset) => a.lastSeen ?? Number.MAX_SAFE_INTEGER,
+      classification: (a: Asset) => [a.vendor, a.type].filter(Boolean).join(' '),
+      location: (a: Asset) => `${a.switchId} ${String(a.portId ?? '').padStart(4, '0')}`,
+      rule: (a: Asset) => a.matchedRule,
+      coverage: (a: Asset) => a.coverage,
+      ...Object.fromEntries(extraColumns.map((k) => [`x:${k}`, (a: Asset) => renderExtra(a.raw?.[k])])),
+    }),
+    [extraColumns]
+  );
+  const { sorted, sort, toggle: toggleSort } = useSort(filtered, accessors);
 
   // Ist-Abgleich: weicht unsere Auswertung von dem ab, was die FortiGate meldet?
   const divergences = useMemo(() => {
@@ -64,7 +83,7 @@ export function AssetsPage() {
     return compareWithFortiGate(assets, simulateAll(assets, ctx));
   }, [assets, ref]);
 
-  const rows = useMemo(() => buildRows(filtered, groupBy), [filtered, groupBy]);
+  const rows = useMemo(() => buildRows(sorted, groupBy), [sorted, groupBy]);
 
   const virt = useVirtualizer({
     count: rows.length,
@@ -167,6 +186,7 @@ export function AssetsPage() {
                   {filtered.length} of {assets.length}
                 </span>
                 <div className="sep" />
+                <ColumnPicker fields={data?.fields ?? []} selected={extraColumns} onChange={setExtraColumns} />
                 <Layers size={12} className="dim" />
                 <select className="select" style={{ width: 'auto', padding: '4px 24px 4px 8px', fontSize: 'var(--fs-xs)' }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>
                   <option value="none">No grouping</option>
@@ -193,18 +213,24 @@ export function AssetsPage() {
                   <col style={{ width: 160 }} />
                   <col style={{ width: 190 }} />
                   <col style={{ width: 110 }} />
+                  {extraColumns.map((k) => (
+                    <col key={k} style={{ width: 150 }} />
+                  ))}
                 </colgroup>
                 <thead>
                   <tr>
                     <th className="col-check">
                       <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} aria-label="Select all visible" />
                     </th>
-                    <th>Device</th>
-                    <th>Address</th>
-                    <th>Classification</th>
-                    <th>Location</th>
-                    <th>Applied rule</th>
-                    <th>Coverage</th>
+                    <SortTh label="Device" col="device" sort={sort} onSort={toggleSort} />
+                    <SortTh label="Address" col="address" sort={sort} onSort={toggleSort} />
+                    <SortTh label="Classification" col="classification" sort={sort} onSort={toggleSort} />
+                    <SortTh label="Location" col="location" sort={sort} onSort={toggleSort} />
+                    <SortTh label="Applied rule" col="rule" sort={sort} onSort={toggleSort} />
+                    <SortTh label="Coverage" col="coverage" sort={sort} onSort={toggleSort} />
+                    {extraColumns.map((k) => (
+                      <SortTh key={k} label={k} col={`x:${k}`} sort={sort} onSort={toggleSort} mono />
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -214,7 +240,7 @@ export function AssetsPage() {
                     if (row.kind === 'group') {
                       return (
                         <tr key={`g-${row.label}`} style={{ height: v.size }}>
-                          <td colSpan={7} style={{ background: 'var(--bg-panel-2)', fontWeight: 600, fontSize: 'var(--fs-xs)', letterSpacing: '0.3px' }}>
+                          <td colSpan={7 + extraColumns.length} style={{ background: 'var(--bg-panel-2)', fontWeight: 600, fontSize: 'var(--fs-xs)', letterSpacing: '0.3px' }}>
                             <span className="dim" style={{ textTransform: 'uppercase' }}>{row.label || '(unclassified)'}</span>
                             <span className="badge gray" style={{ marginLeft: 8 }}>{row.count}</span>
                           </td>
@@ -277,6 +303,14 @@ export function AssetsPage() {
                         <td>
                           <CoverageBadge value={a.coverage} />
                         </td>
+                        {extraColumns.map((k) => {
+                          const v = renderExtra(a.raw?.[k]);
+                          return (
+                            <td key={k} className="xs mono">
+                              {v ? <span className="truncate" style={{ display: 'block' }} title={v}>{v}</span> : <span className="dim">—</span>}
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
                   })}
@@ -322,6 +356,36 @@ export function AssetsPage() {
         />
       )}
     </div>
+  );
+}
+
+/** Sortierbarer Spaltenkopf. */
+function SortTh({
+  label,
+  col,
+  sort,
+  onSort,
+  mono,
+}: {
+  label: string;
+  col: string;
+  sort: ReturnType<typeof useSort>['sort'];
+  onSort: (k: string) => void;
+  mono?: boolean;
+}) {
+  const active = sort.key === col;
+  return (
+    <th
+      className={`sortable ${mono ? 'mono' : ''}`}
+      onClick={() => onSort(col)}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      title="Sort by this column"
+    >
+      <span style={{ color: active ? 'var(--text)' : undefined }}>
+        {label}
+        {sortIndicator(sort, col)}
+      </span>
+    </th>
   );
 }
 
